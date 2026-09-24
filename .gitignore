@@ -1,0 +1,17 @@
+# Dependencies and Next.js build output
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Local secrets and Vercel project link
+.env
+.env.*
+!.env.example
+.vercel/
+
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/
