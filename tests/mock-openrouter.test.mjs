@@ -40,6 +40,30 @@ test("success streams three deltas and finishes with [DONE]", async () => {
   });
 });
 
+test("can pause between deltas for observing Stop during a partial response", async () => {
+  await withServer(async (url) => {
+    const response = await send(url, "success");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    async function readEvent() {
+      let pending = "";
+      while (!pending.includes("\n\n")) {
+        const { done, value } = await reader.read();
+        assert.equal(done, false);
+        pending += decoder.decode(value, { stream: true });
+      }
+      return pending;
+    }
+
+    assert.match(await readEvent(), /Привет/);
+    const started = performance.now();
+    assert.match(await readEvent(), /, это/);
+    assert.ok(performance.now() - started >= 35, "next delta arrived before the configured pause");
+    await reader.cancel();
+  }, { chunkDelayMs: 50 });
+});
+
 test("rate limit is HTTP 429 with JSON; network and midstream failures end abruptly", async () => {
   await withServer(async (url) => {
     const limited = await send(url, "rate-limit");

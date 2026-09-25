@@ -34,7 +34,13 @@ async function readRequest(request) {
   }
 }
 
-export function createMockServer({ scenario = "success", slowMs = 600, timeoutMs = 2_000, onClientAbort = () => {} } = {}) {
+export function createMockServer({
+  scenario = "success",
+  slowMs = 600,
+  timeoutMs = 2_000,
+  chunkDelayMs = 20,
+  onClientAbort = () => {},
+} = {}) {
   return http.createServer(async (request, response) => {
     if (request.method !== "POST" || request.url !== endpoint) {
       response.writeHead(404).end();
@@ -90,10 +96,10 @@ export function createMockServer({ scenario = "success", slowMs = 600, timeoutMs
       return;
     }
 
-    await pause(20);
+    await pause(chunkDelayMs);
     if (response.destroyed) return;
     response.write(delta(", это "));
-    await pause(20);
+    await pause(chunkDelayMs);
     if (response.destroyed) return;
     response.write(delta("тест."));
     response.end("data: [DONE]\n\n");
@@ -107,6 +113,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     scenario,
     slowMs: Number(process.env.MOCK_SLOW_MS ?? 600),
     timeoutMs: Number(process.env.MOCK_TIMEOUT_MS ?? 2_000),
+    chunkDelayMs: Number(process.env.MOCK_CHUNK_MS ?? 20),
     onClientAbort: () => process.stdout.write("Client connection closed after abort\n"),
   });
   server.listen(port, "127.0.0.1", () => {
