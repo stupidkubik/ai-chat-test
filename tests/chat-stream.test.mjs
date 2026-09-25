@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseSseEvents } from "../app/chat-stream.mjs";
+import { consumeSseEvents, parseSseEvents, SseParseError } from "../app/chat-stream.mjs";
 
 function createStream(chunks) {
   return new ReadableStream({
@@ -51,5 +51,23 @@ test("joins multiple data lines and dispatches the final event at end of stream"
 test("rejects an oversized event instead of buffering it without a limit", async () => {
   const stream = createStream([new TextEncoder().encode(`data: ${"x".repeat(1_048_577)}`)]);
 
-  await assert.rejects(collectEvents(stream), /client limit/);
+  await assert.rejects(collectEvents(stream), SseParseError);
+});
+
+test("aborts an open request when SSE parsing fails", async () => {
+  const controller = new AbortController();
+  let abortObserved = false;
+  const stream = new ReadableStream({
+    start(streamController) {
+      streamController.enqueue(new TextEncoder().encode(`data: ${"x".repeat(1_048_577)}`));
+      controller.signal.addEventListener("abort", () => {
+        abortObserved = true;
+        streamController.error(new DOMException("Request aborted", "AbortError"));
+      }, { once: true });
+    },
+  });
+
+  await assert.rejects(consumeSseEvents(stream, controller, () => undefined), SseParseError);
+  assert.equal(controller.signal.aborted, true);
+  assert.equal(abortObserved, true);
 });

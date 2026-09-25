@@ -5,6 +5,18 @@ const EVENT_SEPARATOR = /(?:\r\n|\r|\n){2}/;
  * @typedef {{ event: string, data: string }} ServerSentEvent
  */
 
+export class SseParseError extends Error {
+  constructor() {
+    super("SSE event exceeded the client limit");
+    this.name = "SseParseError";
+  }
+}
+
+/** @param {number} characterCount */
+function assertWithinEventLimit(characterCount) {
+  if (characterCount > MAX_EVENT_CHARACTERS) throw new SseParseError();
+}
+
 /** @param {string} rawEvent */
 function parseEvent(rawEvent) {
   let event = "message";
@@ -45,9 +57,7 @@ export async function* parseSseEvents(stream) {
 
       let separator = EVENT_SEPARATOR.exec(pending);
       while (separator) {
-        if (separator.index > MAX_EVENT_CHARACTERS) {
-          throw new Error("SSE event exceeded the client limit");
-        }
+        assertWithinEventLimit(separator.index);
 
         const rawEvent = pending.slice(0, separator.index);
         pending = pending.slice(separator.index + separator[0].length);
@@ -57,20 +67,40 @@ export async function* parseSseEvents(stream) {
       }
 
       if (done) {
-        if (pending.length > MAX_EVENT_CHARACTERS) {
-          throw new Error("SSE event exceeded the client limit");
-        }
+        assertWithinEventLimit(pending.length);
 
         const finalEvent = parseEvent(pending);
         if (finalEvent) yield finalEvent;
         return;
       }
 
-      if (pending.length > MAX_EVENT_CHARACTERS) {
-        throw new Error("SSE event exceeded the client limit");
-      }
+      assertWithinEventLimit(pending.length);
     }
   } finally {
     reader.releaseLock();
+  }
+}
+
+/**
+ * Consume SSE events with the same controller that owns the Fetch request.
+ * Return false from the handler to stop reading and cancel the response body.
+ *
+ * @param {ReadableStream<Uint8Array>} stream
+ * @param {AbortController} controller
+ * @param {(event: ServerSentEvent) => boolean | void} onEvent
+ */
+export async function consumeSseEvents(stream, controller, onEvent) {
+  try {
+    for await (const event of parseSseEvents(stream)) {
+      if (controller.signal.aborted) return;
+      if (onEvent(event) === false) {
+        controller.abort();
+        return;
+      }
+    }
+  } catch (error) {
+    // Releasing a reader lock does not cancel Fetch; abort the request on parse or handler errors.
+    controller.abort();
+    throw error;
   }
 }
