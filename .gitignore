@@ -15,3 +15,7 @@ coverage/
 .DS_Store
 .idea/
 .vscode/
+
+# Local design tooling and browser inspection artifacts
+.agents/
+.playwright-cli/
