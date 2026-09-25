@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { buildRequestMessages, MAX_MESSAGE_CHARACTERS } from "./chat-context.mjs";
-import { parseSseEvents } from "./chat-stream.mjs";
+import { consumeSseEvents, SseParseError } from "./chat-stream.mjs";
 import { DEMO_STATES, type ChatMessage, type DemoState } from "./chat-types";
 
 type ChatExperienceProps = {
@@ -254,8 +254,8 @@ export default function ChatExperience({
 
       let receivedDone = false;
 
-      for await (const event of parseSseEvents(response.body)) {
-        if (activeControllerRef.current !== controller || controller.signal.aborted) return;
+      await consumeSseEvents(response.body, controller, (event) => {
+        if (activeControllerRef.current !== controller || controller.signal.aborted) return false;
 
         if (event.event === "error") {
           let code = "provider_error";
@@ -269,9 +269,9 @@ export default function ChatExperience({
 
         if (event.data === "[DONE]") {
           receivedDone = true;
-          break;
+          return false;
         }
-        if (!event.data) continue;
+        if (!event.data) return;
 
         let payload: unknown;
         try {
@@ -282,19 +282,19 @@ export default function ChatExperience({
 
         const payloadError = errorCodeFrom(payload);
         if (payloadError) throw new ChatRequestError(payloadError);
-        if (!isRecord(payload) || !Array.isArray(payload.choices)) continue;
+        if (!isRecord(payload) || !Array.isArray(payload.choices)) return;
 
         const choice = payload.choices[0];
-        if (!isRecord(choice) || !isRecord(choice.delta)) continue;
+        if (!isRecord(choice) || !isRecord(choice.delta)) return;
         const delta = choice.delta.content;
-        if (typeof delta !== "string" || delta.length === 0) continue;
+        if (typeof delta !== "string" || delta.length === 0) return;
 
         setMessages((current) => current.map((message) => (
           message.id === assistantId
             ? { ...message, text: message.text + delta }
             : message
         )));
-      }
+      });
 
       if (!receivedDone) throw new ChatRequestError("network_error");
 
@@ -304,14 +304,17 @@ export default function ChatExperience({
       }));
     } catch (error) {
       if (activeControllerRef.current !== controller) return;
-      if (controller.signal.aborted && !clientTimedOut) return;
+      // Stop any response work still in flight before showing the request error.
       controller.abort();
 
-      const code = clientTimedOut
-        ? "timeout"
-        : error instanceof ChatRequestError
-          ? error.code
-          : "network_error";
+      let code = "network_error";
+      if (clientTimedOut) {
+        code = "timeout";
+      } else if (error instanceof ChatRequestError) {
+        code = error.code;
+      } else if (error instanceof SseParseError) {
+        code = "provider_error";
+      }
       setMessages((current) => current.map((message) => (
         message.id === assistantId
           ? { ...message, status: "error", statusMessage: messageForErrorCode(code) }

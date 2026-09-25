@@ -18,7 +18,7 @@ export function buildRequestMessages(history, currentText) {
 
   for (const message of history) {
     if (message.role === "assistant" && !message.text.trim()) {
-      // Keep failed empty turns visible in the transcript, but exclude both sides from context.
+      // Omit the unanswered pair from the request only; the UI keeps the transcript unchanged.
       if (previous.at(-1)?.role === "user") previous.pop();
       continue;
     }
