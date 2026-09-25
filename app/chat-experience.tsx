@@ -159,7 +159,7 @@ export default function ChatExperience({
             aria-label="История разговора"
             className="thread"
             ref={threadRef}
-            tabIndex={-1}
+            tabIndex={0}
           >
             {messages.map((message) => {
               const isCurrentAnswer = message === latestMessage && message.role === "assistant";

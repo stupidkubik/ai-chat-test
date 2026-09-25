@@ -97,6 +97,11 @@ button:focus-visible {
   scrollbar-color: #aebbb2 transparent;
 }
 
+.thread:focus-visible {
+  outline: 3px solid #0b716c;
+  outline-offset: 3px;
+}
+
 .message {
   display: grid;
   grid-template-columns: 100px minmax(0, 1fr);
