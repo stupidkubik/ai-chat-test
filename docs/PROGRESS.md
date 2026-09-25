@@ -8,8 +8,8 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | D01 | принято | Дизайн-агент → координатор | `codex/d01-design` | `docs/ui/UI_SPEC.md`, `UX_REVIEW.md`, `BRIEF_CHECK.md`, `preview.html`, `desktop.png`, `mobile.png`, `empty-mobile.png`, `short-mobile.png` | Сверка с `TASK.md`; Chromium 1440×900, 390×844, 390×320, 390×400, 844×390 и 200×400: форма в viewport, нет горизонтального скролла; пустой экран проверен при 390×320; семантический список; Impeccable detect: 0 находок | [PR #1](https://github.com/stupidkubik/ai-chat-test/pull/1) слит в `main` (`32a64b4`) | Дизайн и прототип завершены; функции и безопасность проверяются на следующих этапах |
 | S02 | принято | Агент каркаса → координатор | `codex/s02-scaffold` | `2475bd4`; `package.json`, lockfile, `app/`, конфигурация TypeScript/ESLint, README-черновик | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build` — успешно; Chromium: `/` открывается, заглушка видна, ошибок консоли нет; `.env.local` игнорируется Git | [PR #2](https://github.com/stupidkubik/ai-chat-test/pull/2) слит в `main` (`e935682`) | Реальные сообщения и API относятся к U04–C06 |
-| T03 | на проверке | Агент тестового окружения → координатор | `codex/t03-test-harness` | `tests/mock-openrouter.mjs`, тесты, `docs/TESTING.md`, npm-команды | `npm test`: 4 проверки прошли без ключа; `npm run lint` и `npm run build` — успешно; CLI mock + `curl`: 200, три SSE-фрагмента и `[DONE]` | PR готовится | Для локального HTTP-сервера тестам нужен доступ к loopback в среде запуска |
-| U04 | не начато | UI-агент → координатор | `codex/u04-ui` | — | — | — | — |
+| T03 | принято | Агент тестового окружения → координатор | `codex/t03-test-harness` | `0577c18`; `tests/mock-openrouter.mjs`, тесты, `docs/TESTING.md`, npm-команды | `npm test`: 4 проверки прошли без ключа; `npm run lint` и `npm run build` — успешно; CLI mock + `curl`: 200, три SSE-фрагмента и `[DONE]` | [PR #3](https://github.com/stupidkubik/ai-chat-test/pull/3) слит в `main` (`fc51b19`) | Локальная история `origin/main` подтверждает merge; GitHub API временно недоступен |
+| U04 | в работе | UI-агент → координатор | `codex/u04-ui` | `app/chat-experience.tsx`, `app/page.tsx`, `app/globals.css`, `next.config.ts`; снимки `docs/ui/u04-desktop.png` и `u04-mobile.png` ожидают сохранения | `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check` — успешно; браузер: 1440×900, 390×844 и 390×320; пустое, сообщение, поток, остановка, ошибка, Tab-порядок и production gating проверены | — | Скриншоты отображены встроенным браузером, но сохранение PNG ожидает подтверждения для Playwright CLI по правилу `product-design:image-to-code`; API и поток относятся к A05/C06 |
 | A05 | не начато | API-агент → координатор | `codex/a05-api` | — | — | — | — |
 | C06 | не начато | Агент клиентского потока → координатор | `codex/c06-streaming` | — | — | — | — |
 | Q07 | не начато | QA-агент → координатор | `codex/q07-qa` | — | — | — | — |
@@ -24,7 +24,7 @@
 | Доступный бесплатный model ID `:free` | A05 и P09 | Проверить каталог перед интеграцией и живым запросом перед сдачей; при деплое проверить снова. |
 | Vercel и допустимость тарифа | Необязательный деплой в P09 | Решение выбрано в `DESIGN.md`; условия проверить для аккаунта, если публикуем сайт. |
 
-GitHub-доступ восстановлен 25.09.2026. Публичный [stupidkubik/ai-chat-test](https://github.com/stupidkubik/ai-chat-test) подключён как `origin`; `main` является веткой по умолчанию. D01 и S02 приняты и слиты; T03 начат от merge-коммита S02.
+GitHub-доступ восстановлен 25.09.2026. Публичный [stupidkubik/ai-chat-test](https://github.com/stupidkubik/ai-chat-test) подключён как `origin`; `main` является веткой по умолчанию. D01, S02 и T03 приняты и слиты; ветка U04 начата от merge-коммита T03 (`fc51b19`).
 
 ## Журнал контрольных точек
 
