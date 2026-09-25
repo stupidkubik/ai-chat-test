@@ -16,6 +16,8 @@
     @media(max-width:350px){.buttons{width:100%}.button{flex:1}.workspace{padding-inline:14px}.actions{flex-direction:column;align-items:stretch}.hint{max-width:none}}
     @media(max-width:240px){.buttons{flex-direction:column}.actions{align-items:stretch}.button{width:100%}}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .thread{list-style:none;margin:0}.empty-state{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}.empty-state[hidden],.thread[hidden],.button[hidden]{display:none}.empty-state h2{font-size:clamp(30px,3vw,38px);letter-spacing:-.04em;line-height:1.14;margin:0 0 12px}.empty-state p{max-width:34ch;margin:0;color:var(--muted);font-size:16px;line-height:1.5}
+    @media(max-width:640px){.empty-state{padding:20px}.empty-state h2{font-size:30px}.empty-state p{font-size:15px}}
   </style>
 </head>
 <body>
@@ -23,12 +25,13 @@
     <header class="masthead"><div class="brand"><span class="brandmark" aria-hidden="true">д</span><span>диалог</span></div></header>
     <main class="workspace">
       <h1 class="sr-only">Диалог с ИИ</h1>
-      <section class="thread" aria-label="История разговора">
-        <article class="message user"><div class="speaker">Вы</div><div class="body"><p>Как подготовиться к собеседованию по React?</p></div></article>
-        <article class="message assistant"><div class="speaker">Ассистент</div><div class="body"><p>Повторите компоненты, состояние и эффекты. Затем соберите небольшой экран и объясните свои решения вслух.</p></div></article>
-        <article class="message user"><div class="speaker">Вы</div><div class="body"><p>А что лучше повторить про useEffect?</p></div></article>
-        <article class="message assistant"><div class="speaker">Ассистент</div><div class="body"><p>Разберите, когда эффект действительно нужен, как работает массив зависимостей и зачем возвращать функцию очистки. Хороший пример — подписка на событие: при изменении зависимости старая подписка должна быть снята.</p><div class="status" role="status"><span class="pulse" aria-hidden="true"></span>Ассистент отвечает</div></div></article>
-      </section>
+      <section class="empty-state" hidden aria-label="Новый разговор"><h2>Начните разговор</h2><p>Задайте вопрос — ответ появится по мере генерации.</p></section>
+      <ol class="thread" aria-label="История разговора">
+        <li class="message user"><div class="speaker">Вы</div><div class="body"><p>Как подготовиться к собеседованию по React?</p></div></li>
+        <li class="message assistant"><div class="speaker">Ассистент</div><div class="body"><p>Повторите компоненты, состояние и эффекты. Затем соберите небольшой экран и объясните свои решения вслух.</p></div></li>
+        <li class="message user"><div class="speaker">Вы</div><div class="body"><p>А что лучше повторить про useEffect?</p></div></li>
+        <li class="message assistant"><div class="speaker">Ассистент</div><div class="body"><p>Разберите, когда эффект действительно нужен, как работает массив зависимостей и зачем возвращать функцию очистки. Хороший пример — подписка на событие: при изменении зависимости старая подписка должна быть снята.</p><div class="status" role="status"><span class="pulse" aria-hidden="true"></span>Ассистент отвечает</div></div></li>
+      </ol>
       <div class="composer-wrap"><form class="composer" action="#" onsubmit="return false"><label class="field-label" for="question">Следующий вопрос</label><textarea id="question" placeholder="Можно написать следующий вопрос…" aria-describedby="draft-hint"></textarea><div class="actions"><span class="hint" id="draft-hint">Отправка после ответа</span><div class="buttons"><button class="button stop" type="button" aria-label="Остановить ответ, Esc">Стоп</button><button class="button send" type="submit" disabled>Отправить</button></div></div></form><p class="footnote">Не вводите личные данные. История исчезнет после обновления страницы.</p></div>
     </main>
   </div>
@@ -38,8 +41,27 @@
     <div class="variant"><h3>Остановлено</h3><p>Разберите, когда эффект действительно нужен…</p><span class="badge warning">Ответ остановлен</span><p class="tip">Полученный текст остаётся; поле ввода снова активно.</p></div>
     <div class="variant"><h3>Лимит бесплатной модели · 429</h3><p>Лимит запросов к бесплатной модели достигнут. Подождите и попробуйте ещё раз.</p><p class="tip">История и черновик следующего вопроса сохраняются.</p></div>
     <div class="variant"><h3>Сеть недоступна</h3><p>Соединение прервалось. Проверьте сеть и отправьте сообщение ещё раз.</p><p class="tip">Если часть ответа уже пришла, она остаётся над ошибкой.</p></div>
+    <div class="variant"><h3>Таймаут</h3><p>Ответ занял слишком много времени. Отправьте сообщение ещё раз.</p><p class="tip">Индикатор исчезает, форма доступна; пришедший фрагмент остаётся.</p></div>
+    <div class="variant"><h3>Ошибка после части ответа</h3><p>Пришедший фрагмент ответа остаётся видимым.</p><span class="badge warning">Соединение прервалось</span><p class="tip">Ошибка следует за фрагментом, не заменяет его.</p></div>
     <div class="variant"><h3>Ответ завершён</h3><span class="badge">Готово</span><p class="tip">Служебный статус исчезает; можно задать следующий вопрос.</p></div>
   </div></section>
-  <script>document.querySelector('.thread').scrollTop = document.querySelector('.thread').scrollHeight;</script>
+  <script>
+    const thread = document.querySelector('.thread');
+    if (new URLSearchParams(location.search).get('state') === 'empty') {
+      thread.hidden = true;
+      document.querySelector('.empty-state').hidden = false;
+      document.querySelector('.field-label').textContent = 'Ваше сообщение';
+      const input = document.querySelector('#question');
+      input.placeholder = 'Напишите вопрос…';
+      input.removeAttribute('aria-describedby');
+      document.querySelector('.hint').textContent = 'Enter — отправить · Shift+Enter — новая строка';
+      document.querySelector('.stop').hidden = true;
+      input.addEventListener('input', () => {
+        document.querySelector('.send').disabled = !input.value.trim();
+      });
+    } else {
+      thread.scrollTop = thread.scrollHeight;
+    }
+  </script>
 </body>
 </html>

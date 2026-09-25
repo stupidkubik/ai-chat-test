@@ -6,7 +6,7 @@
 
 | ID | Статус | Ответственный | Ветка | Коммит / артефакты | Проверки и доказательства | PR → `main` / merge | Блокер / решение |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| D01 | на проверке | Дизайн-агент → координатор | `codex/d01-design` | `docs/ui/UI_SPEC.md`, `UX_REVIEW.md`, `preview.html`, `desktop.png`, `mobile.png` | Отдельный UX-проход; Chromium 1440×900, 390×844, 320 и 200 px без горизонтального скролла; Tab из поля на «Стоп»; Impeccable detect: 0 находок | [PR #1](https://github.com/stupidkubik/ai-chat-test/pull/1) открыт, merge ожидает проверки | Повторная проверка дизайна человеком перед merge и S02 |
+| D01 | на проверке | Дизайн-агент → координатор | `codex/d01-design` | `docs/ui/UI_SPEC.md`, `UX_REVIEW.md`, `BRIEF_CHECK.md`, `preview.html`, `desktop.png`, `mobile.png`, `empty-mobile.png` | Сверка с `TASK.md`; Chromium 1440×900, 390×844 и пустой экран 390×844, 200 px без горизонтального скролла; семантический список; Impeccable detect: 0 находок | [PR #1](https://github.com/stupidkubik/ai-chat-test/pull/1) открыт, merge ожидает проверки | Проверка дизайна человеком перед merge и S02; функции и безопасность проверяются на следующих этапах |
 | S02 | не начато | Агент каркаса → координатор | `codex/s02-scaffold` | — | — | — | — |
 | T03 | не начато | Агент тестового окружения → координатор | `codex/t03-test-harness` | — | — | — | — |
 | U04 | не начато | UI-агент → координатор | `codex/u04-ui` | — | — | — | — |
