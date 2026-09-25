@@ -7,8 +7,8 @@
 | ID | Статус | Ответственный | Ветка | Коммит / артефакты | Проверки и доказательства | PR → `main` / merge | Блокер / решение |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | D01 | принято | Дизайн-агент → координатор | `codex/d01-design` | `docs/ui/UI_SPEC.md`, `UX_REVIEW.md`, `BRIEF_CHECK.md`, `preview.html`, `desktop.png`, `mobile.png`, `empty-mobile.png`, `short-mobile.png` | Сверка с `TASK.md`; Chromium 1440×900, 390×844, 390×320, 390×400, 844×390 и 200×400: форма в viewport, нет горизонтального скролла; пустой экран проверен при 390×320; семантический список; Impeccable detect: 0 находок | [PR #1](https://github.com/stupidkubik/ai-chat-test/pull/1) слит в `main` (`32a64b4`) | Дизайн и прототип завершены; функции и безопасность проверяются на следующих этапах |
-| S02 | на проверке | Агент каркаса → координатор | `codex/s02-scaffold` | `package.json`, lockfile, `app/`, конфигурация TypeScript/ESLint, README-черновик | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build` — успешно; Chromium: `/` открывается, заглушка видна, ошибок консоли нет; `.env.local` игнорируется Git | PR готовится | Реальные сообщения и API относятся к U04–C06 |
-| T03 | не начато | Агент тестового окружения → координатор | `codex/t03-test-harness` | — | — | — | — |
+| S02 | принято | Агент каркаса → координатор | `codex/s02-scaffold` | `2475bd4`; `package.json`, lockfile, `app/`, конфигурация TypeScript/ESLint, README-черновик | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build` — успешно; Chromium: `/` открывается, заглушка видна, ошибок консоли нет; `.env.local` игнорируется Git | [PR #2](https://github.com/stupidkubik/ai-chat-test/pull/2) слит в `main` (`e935682`) | Реальные сообщения и API относятся к U04–C06 |
+| T03 | на проверке | Агент тестового окружения → координатор | `codex/t03-test-harness` | `tests/mock-openrouter.mjs`, тесты, `docs/TESTING.md`, npm-команды | `npm test`: 4 проверки прошли без ключа; `npm run lint` и `npm run build` — успешно; CLI mock + `curl`: 200, три SSE-фрагмента и `[DONE]` | PR готовится | Для локального HTTP-сервера тестам нужен доступ к loopback в среде запуска |
 | U04 | не начато | UI-агент → координатор | `codex/u04-ui` | — | — | — | — |
 | A05 | не начато | API-агент → координатор | `codex/a05-api` | — | — | — | — |
 | C06 | не начато | Агент клиентского потока → координатор | `codex/c06-streaming` | — | — | — | — |
@@ -24,7 +24,7 @@
 | Доступный бесплатный model ID `:free` | A05 и P09 | Проверить каталог перед интеграцией и живым запросом перед сдачей; при деплое проверить снова. |
 | Vercel и допустимость тарифа | Необязательный деплой в P09 | Решение выбрано в `DESIGN.md`; условия проверить для аккаунта, если публикуем сайт. |
 
-GitHub-доступ восстановлен 25.09.2026. Публичный [stupidkubik/ai-chat-test](https://github.com/stupidkubik/ai-chat-test) подключён как `origin`; `main` является веткой по умолчанию. D01 принят и слит; S02 начат от merge-коммита D01.
+GitHub-доступ восстановлен 25.09.2026. Публичный [stupidkubik/ai-chat-test](https://github.com/stupidkubik/ai-chat-test) подключён как `origin`; `main` является веткой по умолчанию. D01 и S02 приняты и слиты; T03 начат от merge-коммита S02.
 
 ## Журнал контрольных точек
 
