@@ -190,13 +190,21 @@ function rateLimitError() {
   return { code: "rate_limited", message: APP_ERRORS.rate_limited };
 }
 
+function mapUpstreamFailure(status) {
+  const providerStatus = Number(status);
+
+  if (providerStatus === 429) {
+    return { responseStatus: 429, error: rateLimitError() };
+  }
+  if (providerStatus === 408 || providerStatus === 504) {
+    return { responseStatus: 504, error: timeoutError() };
+  }
+  return { responseStatus: 502, error: providerError() };
+}
+
 function providerErrorFromPayload(payload) {
   const errorDetails = isRecord(payload) && isRecord(payload.error) ? payload.error : null;
-  const providerCode = Number(errorDetails?.code ?? errorDetails?.status);
-
-  if (providerCode === 429) return rateLimitError();
-  if (providerCode === 408 || providerCode === 504) return timeoutError();
-  return providerError();
+  return mapUpstreamFailure(errorDetails?.code ?? errorDetails?.status).error;
 }
 
 function formatSseError(error) {
@@ -472,10 +480,8 @@ export async function handleChatRequest(request, options = {}) {
   if (!upstreamResponse.ok) {
     await cancelResponseBody(upstreamResponse.body);
     cleanup();
-    if (upstreamResponse.status === 429) {
-      return jsonError(429, "rate_limited", APP_ERRORS.rate_limited);
-    }
-    return jsonError(502, "provider_error", APP_ERRORS.provider_error);
+    const { responseStatus, error } = mapUpstreamFailure(upstreamResponse.status);
+    return jsonError(responseStatus, error.code, error.message);
   }
 
   const responseContentType = upstreamResponse.headers.get("content-type")?.toLowerCase() ?? "";

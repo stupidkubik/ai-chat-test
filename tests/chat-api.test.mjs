@@ -80,6 +80,23 @@ test("maps an upstream 429 to a safe JSON error", async (t) => {
   });
 });
 
+test("maps upstream HTTP timeouts to a safe 504 JSON error", async () => {
+  for (const upstreamStatus of [408, 504]) {
+    const response = await handleChatRequest(makeRequest(), {
+      env: { NODE_ENV: "test", OPENROUTER_MOCK: "1" },
+      fetchImpl: async () => new Response("provider-private-detail", { status: upstreamStatus }),
+    });
+
+    assert.equal(response.status, 504, `upstream ${upstreamStatus}`);
+    assert.deepEqual(await response.json(), {
+      error: {
+        code: "timeout",
+        message: "Ответ не пришёл вовремя. Попробуйте ещё раз.",
+      },
+    });
+  }
+});
+
 test("reports a midstream disconnect after preserving the received event", async (t) => {
   const endpoint = await startMock(t, { scenario: "midstream-disconnect" });
   const response = await handleChatRequest(makeRequest(), {
