@@ -1,18 +1,31 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-
-export type DemoState = "empty" | "message" | "streaming" | "stopped" | "error";
-
-type ChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-};
+import { DEMO_STATES, type ChatMessage, type DemoState } from "./chat-types";
 
 type ChatExperienceProps = {
   initialState: DemoState;
   showDemoControls: boolean;
+};
+
+const demoLabels: Record<DemoState, string> = {
+  empty: "Пустой чат",
+  message: "Сообщение",
+  streaming: "Поток",
+  stopped: "Остановлено",
+  error: "Ошибка",
+};
+
+const followUpQuestion: ChatMessage = {
+  id: "question-2",
+  role: "user",
+  text: "А что лучше повторить про useEffect?",
+};
+
+const followUpAnswer: ChatMessage = {
+  id: "answer-2",
+  role: "assistant",
+  text: "Разберите, когда эффект действительно нужен, как работает массив зависимостей и зачем возвращать функцию очистки. Хороший пример — подписка на событие: при изменении зависимости старая подписка должна быть снята.",
 };
 
 const conversation: ChatMessage[] = [
@@ -26,58 +39,38 @@ const conversation: ChatMessage[] = [
     role: "assistant",
     text: "Повторите компоненты, состояние и эффекты. Затем соберите небольшой экран и объясните свои решения вслух.",
   },
-  {
-    id: "question-2",
-    role: "user",
-    text: "А что лучше повторить про useEffect?",
-  },
-  {
-    id: "answer-2",
-    role: "assistant",
-    text: "Разберите, когда эффект действительно нужен, как работает массив зависимостей и зачем возвращать функцию очистки. Хороший пример — подписка на событие: при изменении зависимости старая подписка должна быть снята.",
-  },
+  followUpQuestion,
+  followUpAnswer,
 ];
 
-const shortConversation: ChatMessage[] = [conversation[2], conversation[3]];
-
-const demoOptions: { state: DemoState; label: string }[] = [
-  { state: "empty", label: "Пустой чат" },
-  { state: "message", label: "Сообщение" },
-  { state: "streaming", label: "Поток" },
-  { state: "stopped", label: "Остановлено" },
-  { state: "error", label: "Ошибка" },
-];
+const demoMessages: Record<DemoState, ChatMessage[]> = {
+  empty: [],
+  message: [],
+  streaming: conversation,
+  stopped: [
+    followUpQuestion,
+    {
+      ...followUpAnswer,
+      text: "Разберите, когда эффект действительно нужен, как работает массив зависимостей и зачем возвращать функцию очистки.",
+    },
+  ],
+  error: [
+    followUpQuestion,
+    {
+      ...followUpAnswer,
+      text: "Разберите, когда эффект действительно нужен, как работает массив зависимостей и зачем возвращать функцию очистки. Хороший пример — подписка на событие: при изменении зависимости старая подписка",
+    },
+  ],
+};
 
 function getMessages(state: DemoState, submittedMessage: string): ChatMessage[] {
-  if (state === "empty") return [];
-
-  if (state === "message") {
-    return [
-      {
-        id: "user-message",
-        role: "user",
-        text: submittedMessage || "Как устроены Server Components в Next.js?",
-      },
-    ];
-  }
-
-  if (state === "streaming") return conversation;
-
-  if (state === "stopped") {
-    return [
-      shortConversation[0],
-      {
-        ...shortConversation[1],
-        text: "Разберите, когда эффект действительно нужен, как работает массив зависимостей и зачем возвращать функцию очистки.",
-      },
-    ];
-  }
+  if (state !== "message") return demoMessages[state];
 
   return [
-    shortConversation[0],
     {
-      ...shortConversation[1],
-      text: "Разберите, когда эффект действительно нужен, как работает массив зависимостей и зачем возвращать функцию очистки. Хороший пример — подписка на событие: при изменении зависимости старая подписка",
+      id: "user-message",
+      role: "user",
+      text: submittedMessage || "Как устроены Server Components в Next.js?",
     },
   ];
 }
@@ -92,11 +85,13 @@ export default function ChatExperience({
   const threadRef = useRef<HTMLOListElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messages = getMessages(state, submittedMessage);
+  const latestMessage = messages[messages.length - 1];
   const hasMessages = messages.length > 0;
   const isGenerating = state === "streaming";
   const hasError = state === "error";
 
   useEffect(() => {
+    // Demo states replace the transcript, so show the latest message in each example.
     if (threadRef.current) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
@@ -114,6 +109,7 @@ export default function ChatExperience({
 
     if (!message || isGenerating) return;
 
+    // U04 previews the text locally; C06 will own conversation history and API behavior.
     setSubmittedMessage(message);
     setState("message");
     setDraft("");
@@ -123,7 +119,7 @@ export default function ChatExperience({
   return (
     <div className="shell">
       <header className="masthead">
-        <div className="brand" aria-label="Диалог">
+        <div className="brand">
           <span className="brandmark" aria-hidden="true">д</span>
           <span>диалог</span>
         </div>
@@ -133,15 +129,15 @@ export default function ChatExperience({
         <aside className="demo-tools" aria-label="Локальные примеры состояний">
           <span className="demo-tools-label">Примеры состояний</span>
           <div className="demo-options" role="group" aria-label="Выберите состояние чата">
-            {demoOptions.map((option) => (
+            {DEMO_STATES.map((demoState) => (
               <button
-                aria-pressed={state === option.state}
+                aria-pressed={state === demoState}
                 className="demo-option"
-                key={option.state}
-                onClick={() => selectDemoState(option.state)}
+                key={demoState}
+                onClick={() => selectDemoState(demoState)}
                 type="button"
               >
-                {option.label}
+                {demoLabels[demoState]}
               </button>
             ))}
           </div>
@@ -165,8 +161,8 @@ export default function ChatExperience({
             ref={threadRef}
             tabIndex={-1}
           >
-            {messages.map((message, index) => {
-              const isCurrentAnswer = message.role === "assistant" && index === messages.length - 1;
+            {messages.map((message) => {
+              const isCurrentAnswer = message === latestMessage && message.role === "assistant";
 
               return (
                 <li className={`message ${message.role}`} key={message.id}>

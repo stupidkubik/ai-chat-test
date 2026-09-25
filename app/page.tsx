@@ -1,9 +1,8 @@
-import ChatExperience, { type DemoState } from "./chat-experience";
+import ChatExperience from "./chat-experience";
+import { DEMO_STATES, type DemoState } from "./chat-types";
 
-const demoStates: DemoState[] = ["empty", "message", "streaming", "stopped", "error"];
-
-function isDemoState(value: string | string[] | undefined): value is DemoState {
-  return typeof value === "string" && demoStates.includes(value as DemoState);
+function isDemoState(value: unknown): value is DemoState {
+  return typeof value === "string" && DEMO_STATES.some((state) => state === value);
 }
 
 export default async function Home({
@@ -11,14 +10,16 @@ export default async function Home({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  if (process.env.NODE_ENV !== "development") {
+    return <ChatExperience initialState="empty" showDemoControls={false} />;
+  }
+
   const params = await searchParams;
-  const localDemo = process.env.NODE_ENV === "development";
-  const state = localDemo && isDemoState(params.state) ? params.state : "empty";
 
   return (
     <ChatExperience
-      initialState={state}
-      showDemoControls={localDemo && params.demo === "1"}
+      initialState={isDemoState(params.state) ? params.state : "empty"}
+      showDemoControls={params.demo === "1"}
     />
   );
 }
