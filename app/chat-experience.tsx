@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { buildRequestMessages, MAX_MESSAGE_CHARACTERS } from "./chat-context.mjs";
 import { parseSseEvents } from "./chat-stream.mjs";
 import { DEMO_STATES, type ChatMessage, type DemoState } from "./chat-types";
 
@@ -9,14 +10,6 @@ type ChatExperienceProps = {
   showDemoControls: boolean;
 };
 
-type RequestMessage = {
-  role: "user" | "assistant";
-  content: string;
-};
-
-const MAX_MESSAGES = 20;
-const MAX_MESSAGE_CHARACTERS = 4_000;
-const MAX_TOTAL_CHARACTERS = 20_000;
 const CLIENT_TIMEOUT_MS = 100_000;
 
 const demoLabels: Record<DemoState, string> = {
@@ -132,52 +125,6 @@ async function responseErrorCode(response: Response): Promise<string> {
   } catch {
     return errorCodeForStatus(response.status);
   }
-}
-
-function buildRequestMessages(history: ChatMessage[], currentText: string): RequestMessage[] {
-  const previous = [...history];
-
-  // A failed request with no answer should stay visible, but it is not useful model context.
-  if (previous.at(-1)?.role === "assistant" && !previous.at(-1)?.text.trim()) {
-    previous.pop();
-    if (previous.at(-1)?.role === "user") previous.pop();
-  }
-
-  const candidates: RequestMessage[] = previous
-    .filter((message) => message.text.trim().length > 0)
-    .map((message) => ({ role: message.role, content: message.text }));
-  candidates.push({
-    role: "user",
-    content: currentText.trim().slice(0, MAX_MESSAGE_CHARACTERS),
-  });
-
-  const selected: RequestMessage[] = [];
-  let totalCharacters = 0;
-
-  for (const message of candidates.slice(-MAX_MESSAGES).reverse()) {
-    const availableCharacters = MAX_TOTAL_CHARACTERS - totalCharacters;
-    if (availableCharacters <= 0) break;
-
-    let content = message.content;
-    if (content.length > MAX_MESSAGE_CHARACTERS) {
-      content = message.role === "assistant"
-        ? content.slice(-MAX_MESSAGE_CHARACTERS)
-        : content.slice(0, MAX_MESSAGE_CHARACTERS);
-    }
-    if (content.length > availableCharacters) {
-      content = message.role === "assistant"
-        ? content.slice(-availableCharacters)
-        : content.slice(0, availableCharacters);
-    }
-    if (!content.trim()) continue;
-
-    selected.push({ role: message.role, content });
-    totalCharacters += content.length;
-  }
-
-  selected.reverse();
-  while (selected[0]?.role === "assistant") selected.shift();
-  return selected;
 }
 
 function createMessageId(): string {
@@ -358,6 +305,7 @@ export default function ChatExperience({
     } catch (error) {
       if (activeControllerRef.current !== controller) return;
       if (controller.signal.aborted && !clientTimedOut) return;
+      controller.abort();
 
       const code = clientTimedOut
         ? "timeout"
@@ -474,14 +422,14 @@ export default function ChatExperience({
                         {message.text ? "Ассистент отвечает" : "Ассистент готовит ответ"}
                       </p>
                     )}
-                    {isLatestAnswer && message.status === "stopped" && (
+                    {message.status === "stopped" && (
                       <p className="message-status stopped-status" role="status" aria-live="polite">
-                        {message.statusMessage}
+                        {message.statusMessage ?? "Ответ остановлен"}
                       </p>
                     )}
-                    {isLatestAnswer && message.status === "error" && (
+                    {message.status === "error" && (
                       <p className="message-status error-status" role="alert">
-                        {message.statusMessage}
+                        {message.statusMessage ?? "Ответ не завершён. Попробуйте ещё раз."}
                       </p>
                     )}
                   </div>
