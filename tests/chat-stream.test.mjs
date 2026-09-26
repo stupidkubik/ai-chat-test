@@ -71,3 +71,20 @@ test("aborts an open request when SSE parsing fails", async () => {
   assert.equal(controller.signal.aborted, true);
   assert.equal(abortObserved, true);
 });
+
+test("reports every network read, including keepalive-only chunks", async () => {
+  const encoder = new TextEncoder();
+  let chunks = 0;
+  const events = [];
+  const stream = createStream([
+    encoder.encode(": OPENROUTER PROCESSING\n\n"),
+    encoder.encode('data: {"choices":[]}\n\n'),
+  ]);
+
+  for await (const event of parseSseEvents(stream, { onChunk: () => { chunks += 1; } })) {
+    events.push(event);
+  }
+
+  assert.equal(chunks, 2);
+  assert.equal(events.length, 1);
+});

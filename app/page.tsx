@@ -11,15 +11,20 @@ export default async function Home({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   if (process.env.NODE_ENV !== "development") {
-    return <ChatExperience initialState="empty" showDemoControls={false} />;
+    return <ChatExperience />;
   }
 
   const params = await searchParams;
+  if (params.demo !== "1") return <ChatExperience />;
 
+  // The fixtures load on the server and only in development, so the client bundle never contains them.
+  const { demoMessages } = await import("./demo-fixtures");
   return (
     <ChatExperience
-      initialState={isDemoState(params.state) ? params.state : "empty"}
-      showDemoControls={params.demo === "1"}
+      demo={{
+        initialState: isDemoState(params.state) ? params.state : "empty",
+        messages: demoMessages,
+      }}
     />
   );
 }

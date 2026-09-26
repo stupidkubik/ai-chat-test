@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import test from "node:test";
-import { handleChatRequest, resolveProviderConfig } from "../app/api/chat/handler.mjs";
+import {
+  createRateLimiter,
+  handleChatRequest,
+  resolveProviderConfig,
+} from "../app/api/chat/handler.mjs";
 import { createMockServer } from "./mock-openrouter.mjs";
 
 const validMessages = [{ role: "user", content: "Привет" }];
@@ -15,7 +19,7 @@ const testEnvironment = (endpoint, scenario) => ({
 function makeRequest(messages = validMessages, { signal, headers = {}, body } = {}) {
   return new Request("http://localhost/api/chat", {
     method: "POST",
-    headers: { "content-type": "application/json", ...headers },
+    headers: { "content-type": "application/json", origin: "http://localhost", ...headers },
     body: body ?? JSON.stringify({ messages }),
     signal,
   });
@@ -91,7 +95,7 @@ test("maps an upstream 429 to a safe JSON error", async (t) => {
   assert.deepEqual(await response.json(), {
     error: {
       code: "rate_limited",
-      message: "Бесплатная модель сейчас перегружена. Попробуйте позже.",
+      message: "Бесплатная модель сейчас перегружена. Подождите и попробуйте ещё раз.",
     },
   });
 });
@@ -244,7 +248,7 @@ test("returns an HTTP timeout before upstream headers arrive", async () => {
   const response = await handleChatRequest(makeRequest(), {
     env: { NODE_ENV: "test", OPENROUTER_MOCK: "1" },
     idleTimeoutMs: 10,
-    totalTimeoutMs: 100,
+    firstDataTimeoutMs: 100,
     fetchImpl: (_url, { signal }) => new Promise((_resolve, reject) => {
       signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
     }),
@@ -258,7 +262,7 @@ test("emits a timeout event when the upstream stalls after SSE starts", async ()
   const response = await handleChatRequest(makeRequest(), {
     env: { NODE_ENV: "test", OPENROUTER_MOCK: "1" },
     idleTimeoutMs: 15,
-    totalTimeoutMs: 100,
+    firstDataTimeoutMs: 100,
     fetchImpl: async (_url, { signal }) => {
       const body = new ReadableStream({
         start(controller) {
@@ -301,4 +305,125 @@ test("aborting the incoming request closes the upstream mock connection", async 
   await reader.cancel().catch(() => {});
 
   assert.equal(didReachMock, true);
+});
+
+test("rejects requests without a same-origin signal before reading the body", async () => {
+  const foreignRequests = [
+    makeRequest(validMessages, { headers: { origin: "" } }),
+    makeRequest(validMessages, { headers: { origin: "https://evil.example" } }),
+    makeRequest(validMessages, { headers: { "sec-fetch-site": "cross-site" } }),
+  ];
+  let fetchCalls = 0;
+
+  for (const request of foreignRequests) {
+    const response = await handleChatRequest(request, {
+      env: { NODE_ENV: "test", OPENROUTER_API_KEY: "not-used" },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        throw new Error("Provider must not be called for a foreign origin");
+      },
+    });
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).error.code, "forbidden");
+  }
+
+  assert.equal(fetchCalls, 0);
+});
+
+test("accepts a browser same-origin request behind a proxy host", async () => {
+  const response = await handleChatRequest(makeRequest(validMessages, {
+    headers: { origin: "https://chat.example", "x-forwarded-host": "chat.example" },
+  }), {
+    env: { NODE_ENV: "test", OPENROUTER_MOCK: "1" },
+    fetchImpl: async () => new Response("data: [DONE]\n\n", {
+      headers: { "content-type": "text/event-stream" },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+});
+
+test("limits requests per client IP within the window", async () => {
+  let currentTime = 0;
+  const rateLimiter = createRateLimiter({ limit: 2, windowMs: 60_000, now: () => currentTime });
+  const send = (ip) => handleChatRequest(makeRequest(validMessages, {
+    headers: { "x-forwarded-for": `${ip}, 10.0.0.1` },
+  }), {
+    env: { NODE_ENV: "test", OPENROUTER_MOCK: "1" },
+    rateLimiter,
+    fetchImpl: async () => new Response("data: [DONE]\n\n", {
+      headers: { "content-type": "text/event-stream" },
+    }),
+  });
+
+  assert.equal((await send("203.0.113.1")).status, 200);
+  currentTime = 1_000;
+  assert.equal((await send("203.0.113.1")).status, 200);
+
+  const limited = await send("203.0.113.1");
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get("retry-after"), "59");
+  assert.equal((await limited.json()).error.code, "local_rate_limited");
+
+  assert.equal((await send("203.0.113.2")).status, 200, "another IP keeps its own quota");
+
+  currentTime = 60_001;
+  assert.equal((await send("203.0.113.1")).status, 200, "the window slides forward");
+});
+
+function slowStream(events, delayMs) {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    async start(controller) {
+      for (const event of events) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        controller.enqueue(encoder.encode(event));
+      }
+      controller.close();
+    },
+  });
+}
+
+test("a live stream longer than the first-data deadline is not cut off", async () => {
+  const chunks = Array.from({ length: 8 }, (_, index) => (
+    `data: ${JSON.stringify({ choices: [{ delta: { content: `часть ${index} ` } }] })}\n\n`
+  ));
+  const response = await handleChatRequest(makeRequest(), {
+    env: { NODE_ENV: "test", OPENROUTER_MOCK: "1" },
+    idleTimeoutMs: 100,
+    firstDataTimeoutMs: 60,
+    fetchImpl: async () => new Response(slowStream([...chunks, "data: [DONE]\n\n"], 25), {
+      headers: { "content-type": "text/event-stream" },
+    }),
+  });
+
+  const stream = await response.text();
+  assert.match(stream, /часть 7/);
+  assert.match(stream, /data: \[DONE\]/);
+  assert.doesNotMatch(stream, /event: error/);
+});
+
+test("keepalive comments alone do not satisfy the first-data deadline", async () => {
+  const response = await handleChatRequest(makeRequest(), {
+    env: { NODE_ENV: "test", OPENROUTER_MOCK: "1" },
+    idleTimeoutMs: 100,
+    firstDataTimeoutMs: 60,
+    fetchImpl: async (_url, { signal }) => {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream({
+        start(controller) {
+          const timer = setInterval(() => controller.enqueue(encoder.encode(": OPENROUTER PROCESSING\n\n")), 20);
+          signal.addEventListener("abort", () => {
+            clearInterval(timer);
+            controller.error(new Error("aborted"));
+          }, { once: true });
+        },
+      });
+      return new Response(body, { headers: { "content-type": "text/event-stream" } });
+    },
+  });
+
+  const stream = await response.text();
+  assert.match(stream, /OPENROUTER PROCESSING/);
+  assert.match(stream, /"code":"timeout"/);
 });

@@ -6,4 +6,4 @@
 
 Перед отправкой ссылки работодателю стоит ещё раз открыть основной адрес в браузере без авторизации и отправить короткий вопрос: доступность внешнего сервиса и бесплатной модели может меняться. Ошибки 429, таймаут и обрыв соединения проверены локально с mock; результаты есть в [QA.md](QA.md).
 
-`app/api/chat/route.ts` задаёт `runtime = "nodejs"` и `maxDuration = 120`; `vercel.json` включает `supportsCancellation` для маршрута чата. `.gitignore` исключает `.vercel/` и `.env.local`.
+`app/api/chat/route.ts` задаёт `runtime = "nodejs"` и `maxDuration = 300` (максимум Hobby с Fluid compute); `vercel.json` включает `supportsCancellation` для маршрута чата. `.gitignore` исключает `.vercel/` и `.env.local`.

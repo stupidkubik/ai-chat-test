@@ -43,9 +43,10 @@ function parseEvent(rawEvent) {
  * or event can arrive in several reads, so both the decoder and text buffer persist.
  *
  * @param {ReadableStream<Uint8Array>} stream
+ * @param {{ onChunk?: () => void }} [options] called for every network read, keepalive comments included
  * @returns {AsyncGenerator<ServerSentEvent>}
  */
-export async function* parseSseEvents(stream) {
+export async function* parseSseEvents(stream, options = {}) {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let pending = "";
@@ -53,6 +54,7 @@ export async function* parseSseEvents(stream) {
   try {
     while (true) {
       const { done, value } = await reader.read();
+      if (!done) options.onChunk?.();
       pending += decoder.decode(value, { stream: !done });
 
       let separator = EVENT_SEPARATOR.exec(pending);
@@ -88,10 +90,11 @@ export async function* parseSseEvents(stream) {
  * @param {ReadableStream<Uint8Array>} stream
  * @param {AbortController} controller
  * @param {(event: ServerSentEvent) => boolean | void} onEvent
+ * @param {{ onChunk?: () => void }} [options]
  */
-export async function consumeSseEvents(stream, controller, onEvent) {
+export async function consumeSseEvents(stream, controller, onEvent, options) {
   try {
-    for await (const event of parseSseEvents(stream)) {
+    for await (const event of parseSseEvents(stream, options)) {
       if (controller.signal.aborted) return;
       if (onEvent(event) === false) {
         controller.abort();

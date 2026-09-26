@@ -1,8 +1,9 @@
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// Hobby maximum with Fluid compute; a live answer is otherwise limited only by upstream inactivity.
+export const maxDuration = 300;
 
-import { handleChatRequest } from "./handler.mjs";
+import { POST as handleChatPost } from "./handler.mjs";
 
 export function POST(request: Request) {
-  return handleChatRequest(request);
+  return handleChatPost(request);
 }

@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { buildRequestMessages, MAX_MESSAGE_CHARACTERS } from "./chat-context.mjs";
-import { consumeSseEvents, SseParseError } from "./chat-stream.mjs";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { MAX_MESSAGE_CHARACTERS } from "./chat-context.mjs";
 import { DEMO_STATES, type ChatMessage, type DemoState } from "./chat-types";
+import { MessageMarkdown } from "./message-markdown";
+import { useChat } from "./use-chat";
 
 type ChatExperienceProps = {
-  initialState: DemoState;
-  showDemoControls: boolean;
+  /** Development-only preview of fixed UI states; absent in production. */
+  demo?: {
+    initialState: DemoState;
+    messages: Record<DemoState, ChatMessage[]>;
+  };
 };
-
-const CLIENT_TIMEOUT_MS = 100_000;
 
 const demoLabels: Record<DemoState, string> = {
   empty: "Пустой чат",
@@ -20,136 +22,25 @@ const demoLabels: Record<DemoState, string> = {
   error: "Ошибка",
 };
 
-const followUpQuestion: ChatMessage = {
-  id: "question-2",
-  role: "user",
-  text: "А что лучше повторить про useEffect?",
-};
-
-const followUpAnswer: ChatMessage = {
-  id: "answer-2",
-  role: "assistant",
-  text: "Разберите, когда эффект действительно нужен, как работает массив зависимостей и зачем возвращать функцию очистки. Хороший пример — подписка на событие: при изменении зависимости старая подписка должна быть снята.",
-};
-
-const conversation: ChatMessage[] = [
-  {
-    id: "question-1",
-    role: "user",
-    text: "Как подготовиться к собеседованию по React?",
-  },
-  {
-    id: "answer-1",
-    role: "assistant",
-    text: "Повторите компоненты, состояние и эффекты. Затем соберите небольшой экран и объясните свои решения вслух.",
-  },
-  followUpQuestion,
-  { ...followUpAnswer, status: "streaming" },
+const examplePrompts = [
+  "Объясни, чем useMemo отличается от useCallback",
+  "Составь план подготовки к собеседованию по React",
+  "Как отменить fetch-запрос в браузере?",
+  "Придумай три имени для кофейни у метро",
 ];
 
-const demoMessages: Record<DemoState, ChatMessage[]> = {
-  empty: [],
-  message: [
-    {
-      id: "demo-question",
-      role: "user",
-      text: "Как устроены Server Components в Next.js?",
-    },
-  ],
-  streaming: conversation,
-  stopped: [
-    followUpQuestion,
-    {
-      ...followUpAnswer,
-      text: "Разберите, когда эффект действительно нужен, как работает массив зависимостей и зачем возвращать функцию очистки.",
-      status: "stopped",
-      statusMessage: "Ответ остановлен",
-    },
-  ],
-  error: [
-    followUpQuestion,
-    {
-      ...followUpAnswer,
-      text: "Разберите, когда эффект действительно нужен, как работает массив зависимостей и зачем возвращать функцию очистки. Хороший пример — подписка на событие: при изменении зависимости старая подписка",
-      status: "error",
-      statusMessage: "Соединение прервалось. Проверьте сеть и отправьте сообщение ещё раз.",
-    },
-  ],
-};
-
-const errorMessages: Record<string, string> = {
-  rate_limited: "Лимит запросов к бесплатной модели достигнут. Подождите и попробуйте ещё раз.",
-  timeout: "Ответ занял слишком много времени. Попробуйте ещё раз.",
-  network_error: "Соединение прервалось. Проверьте сеть и отправьте сообщение ещё раз.",
-  invalid_request: "Проверьте вопрос и попробуйте ещё раз.",
-  configuration_error: "Сервис временно недоступен. Попробуйте позже.",
-  provider_error: "Сервис временно недоступен. Попробуйте позже.",
-};
-
-class ChatRequestError extends Error {
-  code: string;
-
-  constructor(code: string) {
-    const safeCode = Object.hasOwn(errorMessages, code) ? code : "provider_error";
-    super(messageForErrorCode(safeCode));
-    this.code = safeCode;
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function errorCodeFrom(value: unknown): string | null {
-  if (!isRecord(value) || !isRecord(value.error)) return null;
-  return typeof value.error.code === "string" ? value.error.code : null;
-}
-
-function errorCodeForStatus(status: number): string {
-  if (status === 429) return "rate_limited";
-  if (status === 408 || status === 504) return "timeout";
-  if (status === 400) return "invalid_request";
-  return "provider_error";
-}
-
-function messageForErrorCode(code: string): string {
-  return Object.hasOwn(errorMessages, code)
-    ? errorMessages[code]
-    : errorMessages.provider_error;
-}
-
-async function responseErrorCode(response: Response): Promise<string> {
-  try {
-    const payload: unknown = await response.json();
-    return errorCodeFrom(payload) ?? errorCodeForStatus(response.status);
-  } catch {
-    return errorCodeForStatus(response.status);
-  }
-}
-
-function createMessageId(): string {
-  return globalThis.crypto.randomUUID();
-}
-
-export default function ChatExperience({
-  initialState,
-  showDemoControls,
-}: ChatExperienceProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [demoState, setDemoState] = useState<DemoState | null>(
-    showDemoControls ? initialState : null,
-  );
+export default function ChatExperience({ demo }: ChatExperienceProps) {
+  const chat = useChat();
+  const [demoState, setDemoState] = useState<DemoState | null>(demo?.initialState ?? null);
   const [draft, setDraft] = useState("");
-  const [activeAssistantId, setActiveAssistantId] = useState<string | null>(null);
-  const activeControllerRef = useRef<AbortController | null>(null);
   const shouldStickToBottomRef = useRef(true);
   const threadRef = useRef<HTMLOListElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const isGenerating = activeAssistantId !== null;
+  const { isGenerating, stop } = chat;
   const isStreamingPreview = demoState === "streaming";
   const showStopButton = isGenerating || isStreamingPreview;
-  const displayedMessages = demoState === null ? messages : demoMessages[demoState];
+  const displayedMessages = demo && demoState !== null ? demo.messages[demoState] : chat.messages;
   const latestMessage = displayedMessages[displayedMessages.length - 1];
   const hasMessages = displayedMessages.length > 0;
 
@@ -160,189 +51,67 @@ export default function ChatExperience({
     if (demoState !== null || shouldStickToBottomRef.current) {
       thread.scrollTop = thread.scrollHeight;
     }
-  }, [demoState, messages]);
-
-  const stopGeneration = useCallback(() => {
-    const controller = activeControllerRef.current;
-    const assistantId = activeAssistantId;
-    if (!controller || !assistantId) return;
-
-    // Clear the ref first so a read already queued by fetch cannot append after Stop.
-    activeControllerRef.current = null;
-    controller.abort();
-    setActiveAssistantId(null);
-    setMessages((current) => current.map((message) => (
-      message.id === assistantId
-        ? {
-            ...message,
-            status: "stopped",
-            statusMessage: message.text ? "Ответ остановлен" : "Ответ остановлен до начала",
-          }
-        : message
-    )));
-    textareaRef.current?.focus();
-  }, [activeAssistantId]);
+  }, [demoState, chat.messages]);
 
   useEffect(() => {
+    if (!isGenerating) return;
+
     function handleEscape(event: globalThis.KeyboardEvent) {
-      if (event.key !== "Escape" || !activeControllerRef.current) return;
+      if (event.key !== "Escape") return;
       event.preventDefault();
-      stopGeneration();
+      stop();
+      textareaRef.current?.focus();
     }
 
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [stopGeneration]);
+  }, [isGenerating, stop]);
 
-  useEffect(() => () => {
-    activeControllerRef.current?.abort();
-    activeControllerRef.current = null;
-  }, []);
+  function leaveDemo() {
+    setDemoState(null);
+    shouldStickToBottomRef.current = true;
+    textareaRef.current?.focus();
+  }
 
   function selectDemoState(nextState: DemoState) {
-    if (activeControllerRef.current) return;
-    setMessages([]);
+    if (isGenerating) return;
+    chat.reset();
     setDraft("");
     shouldStickToBottomRef.current = true;
     setDemoState(nextState);
   }
 
-  async function sendMessage(text: string, history: ChatMessage[]) {
-    if (activeControllerRef.current) return;
-
-    const userText = text.trim();
-    if (!userText) return;
-
-    const requestMessages = buildRequestMessages(history, userText);
-    const userId = createMessageId();
-    const assistantId = createMessageId();
-    const controller = new AbortController();
-    let clientTimedOut = false;
-
-    activeControllerRef.current = controller;
-    setActiveAssistantId(assistantId);
-    setDemoState(null);
-    setMessages((current) => [
-      ...current,
-      { id: userId, role: "user", text: userText },
-      { id: assistantId, role: "assistant", text: "", status: "streaming" },
-    ]);
-    setDraft("");
-    shouldStickToBottomRef.current = true;
-    textareaRef.current?.focus();
-
-    const clientTimeout = window.setTimeout(() => {
-      if (activeControllerRef.current !== controller) return;
-      clientTimedOut = true;
-      controller.abort();
-    }, CLIENT_TIMEOUT_MS);
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: requestMessages }),
-        cache: "no-store",
-        signal: controller.signal,
-      });
-
-      if (activeControllerRef.current !== controller) return;
-      if (!response.ok) {
-        throw new ChatRequestError(await responseErrorCode(response));
-      }
-      if (!response.body) throw new ChatRequestError("network_error");
-
-      let receivedDone = false;
-
-      await consumeSseEvents(response.body, controller, (event) => {
-        if (activeControllerRef.current !== controller || controller.signal.aborted) return false;
-
-        if (event.event === "error") {
-          let code = "provider_error";
-          try {
-            code = errorCodeFrom(JSON.parse(event.data)) ?? code;
-          } catch {
-            // An unknown error event still ends in a safe, human-readable message.
-          }
-          throw new ChatRequestError(code);
-        }
-
-        if (event.data === "[DONE]") {
-          receivedDone = true;
-          return false;
-        }
-        if (!event.data) return;
-
-        let payload: unknown;
-        try {
-          payload = JSON.parse(event.data);
-        } catch {
-          throw new ChatRequestError("provider_error");
-        }
-
-        const payloadError = errorCodeFrom(payload);
-        if (payloadError) throw new ChatRequestError(payloadError);
-        if (!isRecord(payload) || !Array.isArray(payload.choices)) return;
-
-        const choice = payload.choices[0];
-        if (!isRecord(choice) || !isRecord(choice.delta)) return;
-        const delta = choice.delta.content;
-        if (typeof delta !== "string" || delta.length === 0) return;
-
-        setMessages((current) => current.map((message) => (
-          message.id === assistantId
-            ? { ...message, text: message.text + delta }
-            : message
-        )));
-      });
-
-      if (!receivedDone) throw new ChatRequestError("network_error");
-
-      setMessages((current) => current.map((message) => {
-        if (message.id !== assistantId) return message;
-        return { id: message.id, role: message.role, text: message.text };
-      }));
-    } catch (error) {
-      if (activeControllerRef.current !== controller) return;
-      // Stop any response work still in flight before showing the request error.
-      controller.abort();
-
-      let code = "network_error";
-      if (clientTimedOut) {
-        code = "timeout";
-      } else if (error instanceof ChatRequestError) {
-        code = error.code;
-      } else if (error instanceof SseParseError) {
-        code = "provider_error";
-      }
-      setMessages((current) => current.map((message) => (
-        message.id === assistantId
-          ? { ...message, status: "error", statusMessage: messageForErrorCode(code) }
-          : message
-      )));
-    } finally {
-      window.clearTimeout(clientTimeout);
-      if (activeControllerRef.current === controller) {
-        activeControllerRef.current = null;
-        setActiveAssistantId(null);
-      }
-    }
-  }
-
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = draft.trim();
-    if (!message || isGenerating || isStreamingPreview || activeControllerRef.current) return;
-    void sendMessage(message, messages);
+    if (!message || showStopButton) return;
+    chat.send(message);
+    setDraft("");
+    leaveDemo();
+  }
+
+  function pickExamplePrompt(prompt: string) {
+    setDraft(prompt);
+    // Put the caret at the end so the prompt can be edited before sending.
+    requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      textarea?.focus();
+      textarea?.setSelectionRange(prompt.length, prompt.length);
+    });
+  }
+
+  function handleRetry(assistantId: string) {
+    chat.retry(assistantId);
+    leaveDemo();
   }
 
   function handleStopClick() {
     if (isGenerating) {
-      stopGeneration();
+      stop();
     } else if (isStreamingPreview) {
       setDemoState("stopped");
-      textareaRef.current?.focus();
     }
+    textareaRef.current?.focus();
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -373,7 +142,7 @@ export default function ChatExperience({
         </div>
       </header>
 
-      {showDemoControls && (
+      {demo && (
         <aside className="demo-tools" aria-label="Локальные примеры состояний">
           <span className="demo-tools-label">Примеры состояний</span>
           <div className="demo-options" role="group" aria-label="Выберите состояние чата">
@@ -399,7 +168,19 @@ export default function ChatExperience({
         {!hasMessages && (
           <section className="empty-state" aria-labelledby="empty-title">
             <h2 id="empty-title">Начните разговор</h2>
-            <p>Задайте вопрос — ответ появится по мере генерации.</p>
+            <p>
+              Ответ появляется по мере генерации. Остановить его можно кнопкой «Стоп» или клавишей Esc.
+              История живёт до обновления страницы.
+            </p>
+            <ul className="examples" aria-label="Примеры вопросов">
+              {examplePrompts.map((prompt) => (
+                <li key={prompt}>
+                  <button className="example" onClick={() => pickExamplePrompt(prompt)} type="button">
+                    {prompt}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 
@@ -418,7 +199,11 @@ export default function ChatExperience({
                 <li className={`message ${message.role}`} key={message.id}>
                   <div className="speaker">{message.role === "user" ? "Вы" : "Ассистент"}</div>
                   <div className="message-body">
-                    {message.text && <p>{message.text}</p>}
+                    {message.text && (
+                      message.role === "assistant"
+                        ? <MessageMarkdown text={message.text} />
+                        : <p>{message.text}</p>
+                    )}
                     {isLatestAnswer && message.status === "streaming" && (
                       <p className="message-status" role="status" aria-live="polite">
                         <span className="status-dot" aria-hidden="true" />
@@ -431,9 +216,21 @@ export default function ChatExperience({
                       </p>
                     )}
                     {message.status === "error" && (
-                      <p className="message-status error-status" role="alert">
-                        {message.statusMessage ?? "Ответ не завершён. Попробуйте ещё раз."}
-                      </p>
+                      <div className="message-error">
+                        <p className="message-status error-status" role="alert">
+                          {message.statusMessage ?? "Ответ не завершён. Попробуйте ещё раз."}
+                        </p>
+                        {isLatestAnswer && (
+                          <button
+                            className="button retry"
+                            disabled={showStopButton || demoState !== null}
+                            onClick={() => handleRetry(message.id)}
+                            type="button"
+                          >
+                            Повторить
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </li>

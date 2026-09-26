@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { test } from "node:test";
-import { createMockServer } from "./mock-openrouter.mjs";
+import { createMockServer, MARKDOWN_ANSWER } from "./mock-openrouter.mjs";
 
 const path = "/api/v1/chat/completions";
 const payload = JSON.stringify({ model: "test:free", stream: true, messages: [{ role: "user", content: "Hi" }] });
@@ -103,4 +103,14 @@ test("abort-observed sees client cancellation", async () => {
       new Promise((_, reject) => setTimeout(() => reject(new Error("abort not observed")), 1_000)),
     ]);
   }, { onClientAbort: () => observed() });
+});
+
+test("markdown streams the sample answer in small slices", async () => {
+  await withServer(async (url) => {
+    const events = (await (await send(url, "markdown")).text()).trim().split("\n\n");
+    assert.equal(events.at(-1), "data: [DONE]");
+    const deltas = events.slice(0, -1).map((event) => JSON.parse(event.slice(6)).choices[0].delta.content);
+    assert.ok(deltas.length > 20);
+    assert.equal(deltas.join(""), MARKDOWN_ANSWER);
+  }, { chunkDelayMs: 0 });
 });
