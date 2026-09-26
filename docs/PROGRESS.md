@@ -11,8 +11,8 @@
 | T03 | принято | Агент тестового окружения → координатор | `codex/t03-test-harness` | `0577c18`; `tests/mock-openrouter.mjs`, тесты, `docs/TESTING.md`, npm-команды | `npm test`: 4 проверки прошли без ключа; `npm run lint` и `npm run build` — успешно; CLI mock + `curl`: 200, три SSE-фрагмента и `[DONE]` | [PR #3](https://github.com/stupidkubik/ai-chat-test/pull/3) слит в `main` (`fc51b19`) | Локальная история `origin/main` подтверждает merge; GitHub API временно недоступен |
 | U04 | принято | UI-агент → координатор | `codex/u04-ui` | `app/chat-experience.tsx`, `app/chat-types.ts`, `app/page.tsx`, `app/globals.css`, `next.config.ts`; `docs/ui/u04-desktop.png`, `docs/ui/u04-mobile.png`, `design-qa.md` | `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check` — успешно; браузер: 1440×900, 390×844 и 390×320; состояния, focusable-история с клавиатурной прокруткой, Tab-порядок и production gating проверены; `/` статически пререндерен; визуальная сверка D01 прошла | [PR #4](https://github.com/stupidkubik/ai-chat-test/pull/4) слит в `main` (`2005eef`) | U04 принят; API и поток относятся к A05/C06 |
 | A05 | принято | API-агент → координатор | `codex/a05-api` | `ce38889`, `3d564fa`, P2-фикс `667bbef`; `app/api/chat/route.ts`, `handler.mjs`, `vercel.json`, `tests/chat-api.test.mjs`, `.env.example`, `docs/TESTING.md` | `npm run test` — 17 проверок успешно; `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check` — успешно; локальный `/api/chat` вернул ожидаемый 400; live OpenRouter: 200, потоковый текст и `[DONE]`; 12 клиентских файлов проверены, ключ не найден. GitHub checks не настроены | [PR #5](https://github.com/stupidkubik/ai-chat-test/pull/5) слит в `main` (`5460678`) | Отмену на Vercel повторить после деплоя |
-| C06 | принято; замечания ревью исправлены в follow-up | Клиентский поток → координатор | `codex/c06-streaming`, `codex/c06-review-fixes` | `9835d8c`, `d43360d`, `9732956`; клиентский SSE-парсер, контекст запросов, статусы остановки/ошибок и тесты | `npm run test` — 24/24; `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check` — успешно. Chromium/mock подтвердил сохранение меток у двух последовательных частичных ошибок; тест подтвердил отмену при ошибке парсера | [PR #6](https://github.com/stupidkubik/ai-chat-test/pull/6) слит в `main` (`bcb9823`); [follow-up PR #7](https://github.com/stupidkubik/ai-chat-test/pull/7) открыт для ревью; CI-проверки для ветки не настроены | Только локальный mock; живой OpenRouter не вызывался |
-| Q07 | не начато | QA-агент → координатор | `codex/q07-qa` | — | — | — | — |
+| C06 | принято; замечания ревью исправлены в follow-up | Клиентский поток → координатор | `codex/c06-streaming`, `codex/c06-review-fixes` | `9835d8c`, `d43360d`, `9732956`; клиентский SSE-парсер, контекст запросов, статусы остановки/ошибок и тесты | `npm run test` — 24/24; `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check` — успешно. Chromium/mock подтвердил сохранение меток у двух последовательных частичных ошибок; тест подтвердил отмену при ошибке парсера | [PR #6](https://github.com/stupidkubik/ai-chat-test/pull/6) слит в `main` (`bcb9823`); [PR #7](https://github.com/stupidkubik/ai-chat-test/pull/7) слит в `main` (`6a2e33e`); CI-проверки для ветки не настроены | Только локальный mock; отмену на Vercel проверить в Q07 |
+| Q07 | на проверке | Координатор | `codex/q07-qa` | `8f3d91c`; `docs/DEPLOYMENT.md`, `docs/QA.md`, `output/playwright/`; Preview и Production `READY` для `2126d63` | В авторизованном Chrome Production: SSE, история, Stop после чанка, Esc до чанка, новый запрос, клавиатура и мобильная ширина прошли. Локальный mock: 429, обрывы и таймаут; тесты 24/24, lint/typecheck/build успешно. Подробная матрица в `docs/QA.md` | [PR #8](https://github.com/stupidkubik/ai-chat-test/pull/8) открыт | Переданный URL — Preview без ключа: `/api/chat` возвращает 500. Production работает, но оба deployment защищены Vercel Login. Для публичной демонстрации нужен отдельный выбор области доступа; для работающего Preview — отдельный секрет и новый deployment. |
 | R08 | не начато | Агент документации → координатор | `codex/r08-docs` | — | — | — | — |
 | P09 | не начато | Координатор | `codex/p09-release` | — | — | — | — |
 
@@ -20,11 +20,11 @@
 
 | Зависимость | Нужна к | Текущее состояние |
 | --- | --- | --- |
-| OpenRouter API key | Живой тест перед P09; при деплое — настройка хостинга | Один минимальный запрос через `/api/chat` уже прошёл; значение ключа не выводилось и не добавлялось в Git. При деплое настроить ключ как server-side переменную. |
+| OpenRouter API key для Preview | Если нужен отдельный Preview | `vercel env ls` показал только Production. Переданный Preview URL отвечает `configuration_error`; значение секрета не считывалось. |
 | Доступный бесплатный model ID | A05 и P09 | Выбран официальный router `openrouter/free`; 25.09.2026 live streaming завершился `[DONE]`. Проверить повторно после деплоя, так как конкретная модель-исполнитель меняется. |
-| Vercel и допустимость тарифа | Необязательный деплой в P09 | Решение выбрано в `DESIGN.md`; условия проверить для аккаунта, если публикуем сайт. |
+| Vercel project и допустимость тарифа | P09 | `ai-chat-test` создан в команде Hobby и привязан к локальному checkout; GitHub-интеграция не подключена. Production уже создан владельцем и протестирован в Q07; доступ пока требует Vercel Login. Перед публичной публикацией проверить условия тарифа и настройки доступа. |
 
-GitHub-доступ восстановлен 25.09.2026. Публичный [stupidkubik/ai-chat-test](https://github.com/stupidkubik/ai-chat-test) подключён как `origin`; `main` является веткой по умолчанию. D01–C06 приняты и слиты; C06-review follow-up PR #7 открыт, работа Q07 ещё не начата.
+GitHub-доступ восстановлен 25.09.2026. Публичный [stupidkubik/ai-chat-test](https://github.com/stupidkubik/ai-chat-test) подключён как `origin`; `main` является веткой по умолчанию. D01–C06 приняты и слиты; PR #7 также слит (`6a2e33e`). Ветка Q07 обновлена от актуального `origin/main`; Preview создан вручную из локального checkout.
 
 ## Журнал контрольных точек
 
@@ -47,7 +47,7 @@ GitHub-доступ восстановлен 25.09.2026. Публичный [stu
 Ссылки: [PR #5](https://github.com/stupidkubik/ai-chat-test/pull/5), `5460678`.
 Решение и следующий шаг: продолжить по плану C06.
 
-2026-09-25 — C06 — принято по локальным критериям, PR #6 открыт и готов к merge
+2026-09-25 — C06 — принято и слито в `main` (`bcb9823`)
 Проверено: 21 тест, lint, typecheck, production build, `git diff --check`; браузерный поток через local mock: Stop после первого чанка сохраняет его и игнорирует поздние чанки, следующий запрос работает, Esc до первого чанка останавливает ожидание. Живой OpenRouter не использовался.
 Ссылки: `9835d8c`, [PR #6](https://github.com/stupidkubik/ai-chat-test/pull/6), `app/chat-stream.mjs`, `tests/chat-stream.test.mjs`.
 Решение и следующий шаг: слить PR #6 merge commit и начать Q07 после обновления его ветки от `origin/main`.
@@ -56,3 +56,28 @@ GitHub-доступ восстановлен 25.09.2026. Публичный [stu
 Проверено: `npm run test` — 24/24; lint, typecheck, production build, `git diff --check`; Chromium с локальным mock сохранил метки ошибок у двух последовательных частичных ответов; unit-тест проверил отмену открытого потока при ошибке парсера.
 Ссылки: `d43360d`, `9732956`, [PR #6](https://github.com/stupidkubik/ai-chat-test/pull/6), [PR #7](https://github.com/stupidkubik/ai-chat-test/pull/7).
 Решение и следующий шаг: все замечания бота подтверждены и исправлены; PR #7 оставить открытым для ревью. CI-проверки не настроены.
+
+2026-09-25 — C06 — follow-up PR #7 слит в `main` (`6a2e33e`)
+Проверено: merge commit PR #7 зафиксирован в `origin/main`; C06 review fixes стали частью основной ветки.
+Ссылки: [PR #7](https://github.com/stupidkubik/ai-chat-test/pull/7), `6a2e33e`.
+Решение и следующий шаг: перед Q07 обновить его ветку от `origin/main`; проверить отмену на Vercel Preview.
+
+2026-09-26 — Q07 — подготовка Vercel Preview
+Проверено: `codex/q07-qa` перебазирована на `origin/main` (`6a2e33e`); Vercel-конфигурация уже включает поддержку отмены; локальной `.vercel/`-связи нет.
+Артефакт: `docs/DEPLOYMENT.md`.
+Решение и следующий шаг: подключить репозиторий в Vercel и настроить владельцем секрет `OPENROUTER_API_KEY` для Preview; затем выполнить Preview QA. Production не запускался.
+
+2026-09-26 — Q07 — Vercel Preview
+Проверено: создан проект `ai-chat-test` в команде Hobby, установлен framework preset Next.js и привязан локальный checkout. Deployment `CreptkauiU8SY3S6bptSZuKZGuoU` для `codex/q07-qa` / `2126d63` имеет статус `READY`; CLI вывел Preview URL https://ai-chat-test-c5hgvgcn0-evgeniis-projects-0daccd9a.vercel.app. Успешная сборка прошла на Vercel. Главная страница открылась в браузере с авторизацией Vercel. GitHub-интеграция не подключена, `OPENROUTER_API_KEY` не передавался.
+Ограничения: неавторизованный Playwright перенаправлен на Vercel Login, поэтому ошибки console самого приложения не собраны. Первый CLI-запуск с `--target=preview` создал deployment с `target=production` и `state=ERROR` при preset `Other`; успешного Production deployment нет. Повторный запуск без `--target` создал Preview со статусом `READY`.
+Решение и следующий шаг: владелец добавляет `OPENROUTER_API_KEY` только в Preview environment; затем повторный Preview-деплой и проверка живого SSE/Stop/console. GitHub-интеграцию подключать отдельно после согласования безопасного поведения production branch.
+
+2026-09-26 — Q07 — владелец проверил чат
+Проверено: владелец сообщил, что добавил `OPENROUTER_API_KEY` в переменные Vercel и чат работает. По Vercel API текущий deployment `7TZsHwZNuAsN6ZuoWLF16SHKkfXH` имеет `target=production`, статус `READY`, commit `2126d63` и production aliases. Область переменной отдельно не подтверждена; значение секрета не считывалось. Независимая проверка console, SSE и Stop не выполнялась.
+Ссылки: [текущий deployment](https://vercel.com/evgeniis-projects-0daccd9a/ai-chat-test/7TZsHwZNuAsN6ZuoWLF16SHKkfXH), https://ai-chat-test-qtkzgxfbh-evgeniis-projects-0daccd9a.vercel.app.
+Решение и следующий шаг: Q07 остаётся в работе до отдельной проверки Preview, включая console и отмену; Production deployment не изменять.
+
+2026-09-26 — Q07 — на проверке после браузерной QA
+Проверено: переданная ссылка через `vercel inspect` определена как Preview; `vercel env ls` показал секрет только в Production, а Preview `/api/chat` вернул 500 `configuration_error`. На фактическом Production независимо проверены поток, история, Stop и Esc, следующий запрос, длинный ответ, 390 px и чистая консоль при загрузке. Локальный mock подтвердил 429, сетевой обрыв, разрыв после первого чанка и таймаут; `npm test` — 24/24, lint/typecheck/build успешны.
+Ссылки: [матрица Q07](QA.md), [PR #8](https://github.com/stupidkubik/ai-chat-test/pull/8), [Production](https://ai-chat-test-qtkzgxfbh-evgeniis-projects-0daccd9a.vercel.app/), [Preview](https://ai-chat-test-c5hgvgcn0-evgeniis-projects-0daccd9a.vercel.app/).
+Решение и следующий шаг: живой QA по решению владельца проведён на Production. Оба адреса требуют Vercel Login без авторизованной сессии; изменение защиты или области секрета в этом проходе не выполнялось. Перед внешней сдачей решить вопрос публичного доступа, а Preview настраивать отдельно только если он нужен.
