@@ -65,6 +65,22 @@ test("proxies the fixed free model as an SSE stream through the local mock", asy
   assert.doesNotMatch(stream, /Free model rate limit/);
 });
 
+test("accepts a final DONE event without a trailing blank line", async () => {
+  const response = await handleChatRequest(makeRequest(), {
+    env: { NODE_ENV: "test", OPENROUTER_MOCK: "1" },
+    fetchImpl: async () => new Response(
+      'data: {"choices":[{"delta":{"content":"Да"}}]}\n\ndata: [DONE]',
+      { headers: { "content-type": "text/event-stream" } },
+    ),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    await response.text(),
+    'data: {"choices":[{"delta":{"content":"Да"}}]}\n\ndata: [DONE]\n\n',
+  );
+});
+
 test("maps an upstream 429 to a safe JSON error", async (t) => {
   const endpoint = await startMock(t, { scenario: "rate-limit" });
   const response = await handleChatRequest(makeRequest(), {
