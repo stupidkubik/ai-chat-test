@@ -296,6 +296,34 @@ textarea:focus-visible {
   background: #80361b;
 }
 
+.message-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin-top: 15px;
+}
+
+.message-error .message-status {
+  margin-top: 0 !important;
+}
+
+.button.retry {
+  flex: none;
+  border-color: #9c4626;
+  background: transparent;
+  color: #9c4626;
+}
+
+.button.retry:hover:not(:disabled) {
+  background: #f6e9e3;
+}
+
+.button.retry:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .footnote {
   margin: 13px 0 0;
   color: #58615e;
