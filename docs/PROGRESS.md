@@ -12,7 +12,7 @@
 | U04 | принято | UI-агент → координатор | `codex/u04-ui` | `app/chat-experience.tsx`, `app/chat-types.ts`, `app/page.tsx`, `app/globals.css`, `next.config.ts`; `docs/ui/u04-desktop.png`, `docs/ui/u04-mobile.png`, `design-qa.md` | `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check` — успешно; браузер: 1440×900, 390×844 и 390×320; состояния, focusable-история с клавиатурной прокруткой, Tab-порядок и production gating проверены; `/` статически пререндерен; визуальная сверка D01 прошла | [PR #4](https://github.com/stupidkubik/ai-chat-test/pull/4) слит в `main` (`2005eef`) | U04 принят; API и поток относятся к A05/C06 |
 | A05 | принято | API-агент → координатор | `codex/a05-api` | `ce38889`, `3d564fa`, P2-фикс `667bbef`; `app/api/chat/route.ts`, `handler.mjs`, `vercel.json`, `tests/chat-api.test.mjs`, `.env.example`, `docs/TESTING.md` | `npm run test` — 17 проверок успешно; `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check` — успешно; локальный `/api/chat` вернул ожидаемый 400; live OpenRouter: 200, потоковый текст и `[DONE]`; 12 клиентских файлов проверены, ключ не найден. GitHub checks не настроены | [PR #5](https://github.com/stupidkubik/ai-chat-test/pull/5) слит в `main` (`5460678`) | Отмену на Vercel повторить после деплоя |
 | C06 | принято; замечания ревью исправлены в follow-up | Клиентский поток → координатор | `codex/c06-streaming`, `codex/c06-review-fixes` | `9835d8c`, `d43360d`, `9732956`; клиентский SSE-парсер, контекст запросов, статусы остановки/ошибок и тесты | `npm run test` — 24/24; `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check` — успешно. Chromium/mock подтвердил сохранение меток у двух последовательных частичных ошибок; тест подтвердил отмену при ошибке парсера | [PR #6](https://github.com/stupidkubik/ai-chat-test/pull/6) слит в `main` (`bcb9823`); [PR #7](https://github.com/stupidkubik/ai-chat-test/pull/7) слит в `main` (`6a2e33e`); CI-проверки для ветки не настроены | Только локальный mock; отмену на Vercel проверить в Q07 |
-| Q07 | в работе | Координатор | `codex/q07-qa` | `docs/DEPLOYMENT.md`; подготовка Vercel Preview | Деплой и браузерная проверка ещё не запускались; локальная связь с Vercel project отсутствует; статус Preview secret не проверен | — | Нужны подключение GitHub-репозитория в Vercel и `OPENROUTER_API_KEY` в Preview environment |
+| Q07 | в работе | Координатор | `codex/q07-qa` | `docs/DEPLOYMENT.md`; Vercel Preview `READY` для `2126d63` | Удалённая сборка Next.js 16.3.6 прошла; главная открылась в авторизованном браузере. Preview защищён входом Vercel. Изолированный Playwright был перенаправлен на Vercel Login, поэтому app console не проверена. AI-запрос, SSE и отмена ещё не проверены: Preview secret не задан | — | Добавить `OPENROUTER_API_KEY` только для Preview; при необходимости отдельно подключить GitHub для автодеплоев веток |
 | R08 | не начато | Агент документации → координатор | `codex/r08-docs` | — | — | — | — |
 | P09 | не начато | Координатор | `codex/p09-release` | — | — | — | — |
 
@@ -20,11 +20,11 @@
 
 | Зависимость | Нужна к | Текущее состояние |
 | --- | --- | --- |
-| OpenRouter API key для Preview | Q07 | Статус в аккаунте не проверен; при настройке добавить как server-side переменную Preview, не в Production и не в `NEXT_PUBLIC_*`. |
+| OpenRouter API key для Preview | Q07 | В проект Preview не добавлен; значение вводит владелец непосредственно в Vercel как server-side Sensitive-переменную, не в Production и не в `NEXT_PUBLIC_*`. |
 | Доступный бесплатный model ID | A05 и P09 | Выбран официальный router `openrouter/free`; 25.09.2026 live streaming завершился `[DONE]`. Проверить повторно после деплоя, так как конкретная модель-исполнитель меняется. |
-| Vercel project и допустимость тарифа | Q07 Preview, Production — при необходимости в P09 | Checkout не привязан к Vercel project; подключить репозиторий через аккаунт и проверить условия тарифа до публичного Production-деплоя. |
+| Vercel project и допустимость тарифа | Q07 Preview, Production — при необходимости в P09 | `ai-chat-test` создан в команде Hobby и привязан к локальному checkout; GitHub-интеграция не подключена. Перед будущим Production-деплоем проверить условия тарифа и настройки production branch. |
 
-GitHub-доступ восстановлен 25.09.2026. Публичный [stupidkubik/ai-chat-test](https://github.com/stupidkubik/ai-chat-test) подключён как `origin`; `main` является веткой по умолчанию. D01–C06 приняты и слиты; PR #7 также слит (`6a2e33e`). Ветка Q07 обновлена от актуального `origin/main`; Preview ещё не создан.
+GitHub-доступ восстановлен 25.09.2026. Публичный [stupidkubik/ai-chat-test](https://github.com/stupidkubik/ai-chat-test) подключён как `origin`; `main` является веткой по умолчанию. D01–C06 приняты и слиты; PR #7 также слит (`6a2e33e`). Ветка Q07 обновлена от актуального `origin/main`; Preview создан вручную из локального checkout.
 
 ## Журнал контрольных точек
 
@@ -66,3 +66,8 @@ GitHub-доступ восстановлен 25.09.2026. Публичный [stu
 Проверено: `codex/q07-qa` перебазирована на `origin/main` (`6a2e33e`); Vercel-конфигурация уже включает поддержку отмены; локальной `.vercel/`-связи нет.
 Артефакт: `docs/DEPLOYMENT.md`.
 Решение и следующий шаг: подключить репозиторий в Vercel и настроить владельцем секрет `OPENROUTER_API_KEY` для Preview; затем выполнить Preview QA. Production не запускался.
+
+2026-09-26 — Q07 — Vercel Preview
+Проверено: создан проект `ai-chat-test` в команде Hobby, установлен framework preset Next.js и привязан локальный checkout. Deployment `CreptkauiU8SY3S6bptSZuKZGuoU` для `codex/q07-qa` / `2126d63` имеет статус `READY`; CLI вывел Preview URL https://ai-chat-test-c5hgvgcn0-evgeniis-projects-0daccd9a.vercel.app. Успешная сборка прошла на Vercel. Главная страница открылась в браузере с авторизацией Vercel. GitHub-интеграция не подключена, `OPENROUTER_API_KEY` не передавался.
+Ограничения: неавторизованный Playwright перенаправлен на Vercel Login, поэтому ошибки console самого приложения не собраны. Первый CLI-запуск с `--target=preview` создал deployment с `target=production` и `state=ERROR` при preset `Other`; успешного Production deployment нет. Повторный запуск без `--target` создал Preview со статусом `READY`.
+Решение и следующий шаг: владелец добавляет `OPENROUTER_API_KEY` только в Preview environment; затем повторный Preview-деплой и проверка живого SSE/Stop/console. GitHub-интеграцию подключать отдельно после согласования безопасного поведения production branch.
