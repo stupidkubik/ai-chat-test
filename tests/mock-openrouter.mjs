@@ -5,8 +5,30 @@ import { fileURLToPath } from "node:url";
 const endpoint = "/api/v1/chat/completions";
 const scenarios = new Set([
   "success", "rate-limit", "network-failure", "midstream-disconnect",
-  "slow", "timeout", "abort-observed",
+  "slow", "timeout", "abort-observed", "markdown",
 ]);
+
+export const MARKDOWN_ANSWER = [
+  "### Отмена запроса",
+  "",
+  "Используйте **AbortController** — он работает и с `fetch`, и с потоком:",
+  "",
+  "1. Создайте контроллер.",
+  "2. Передайте `signal` в запрос.",
+  "3. Вызовите `abort()` по кнопке «Стоп».",
+  "",
+  "```js",
+  "const controller = new AbortController();",
+  "fetch(\"/api/chat\", { method: \"POST\", signal: controller.signal });",
+  "controller.abort();",
+  "```",
+  "",
+  "| Событие | Что происходит |",
+  "| --- | --- |",
+  "| abort() | fetch отклоняется с AbortError |",
+  "",
+  "Подробнее — в [документации MDN](https://developer.mozilla.org/docs/Web/API/AbortController).",
+].join("\n");
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -80,6 +102,17 @@ export function createMockServer({
         if (!response.writableEnded) onClientAbort();
       });
       response.write(": waiting for client cancellation\n\n");
+      return;
+    }
+
+    if (selected === "markdown") {
+      // Small slices leave ** and ``` unclosed mid-stream, as a real model does.
+      for (let index = 0; index < MARKDOWN_ANSWER.length; index += 6) {
+        response.write(delta(MARKDOWN_ANSWER.slice(index, index + 6)));
+        await pause(chunkDelayMs);
+        if (response.destroyed) return;
+      }
+      response.end("data: [DONE]\n\n");
       return;
     }
 

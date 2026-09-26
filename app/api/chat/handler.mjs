@@ -21,6 +21,7 @@ const MOCK_SCENARIOS = new Set([
   "slow",
   "timeout",
   "abort-observed",
+  "markdown",
 ]);
 
 function jsonError(status, code, headers = {}) {

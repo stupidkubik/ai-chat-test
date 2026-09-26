@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { MAX_MESSAGE_CHARACTERS } from "./chat-context.mjs";
 import { DEMO_STATES, type ChatMessage, type DemoState } from "./chat-types";
+import { MessageMarkdown } from "./message-markdown";
 import { useChat } from "./use-chat";
 
 type ChatExperienceProps = {
@@ -20,6 +21,13 @@ const demoLabels: Record<DemoState, string> = {
   stopped: "Остановлено",
   error: "Ошибка",
 };
+
+const examplePrompts = [
+  "Объясни, чем useMemo отличается от useCallback",
+  "Составь план подготовки к собеседованию по React",
+  "Как отменить fetch-запрос в браузере?",
+  "Придумай три имени для кофейни у метро",
+];
 
 export default function ChatExperience({ demo }: ChatExperienceProps) {
   const chat = useChat();
@@ -80,6 +88,16 @@ export default function ChatExperience({ demo }: ChatExperienceProps) {
     chat.send(message);
     setDraft("");
     leaveDemo();
+  }
+
+  function pickExamplePrompt(prompt: string) {
+    setDraft(prompt);
+    // Put the caret at the end so the prompt can be edited before sending.
+    requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      textarea?.focus();
+      textarea?.setSelectionRange(prompt.length, prompt.length);
+    });
   }
 
   function handleRetry(assistantId: string) {
@@ -150,7 +168,19 @@ export default function ChatExperience({ demo }: ChatExperienceProps) {
         {!hasMessages && (
           <section className="empty-state" aria-labelledby="empty-title">
             <h2 id="empty-title">Начните разговор</h2>
-            <p>Задайте вопрос — ответ появится по мере генерации.</p>
+            <p>
+              Ответ появляется по мере генерации. Остановить его можно кнопкой «Стоп» или клавишей Esc.
+              История живёт до обновления страницы.
+            </p>
+            <ul className="examples" aria-label="Примеры вопросов">
+              {examplePrompts.map((prompt) => (
+                <li key={prompt}>
+                  <button className="example" onClick={() => pickExamplePrompt(prompt)} type="button">
+                    {prompt}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 
@@ -169,7 +199,11 @@ export default function ChatExperience({ demo }: ChatExperienceProps) {
                 <li className={`message ${message.role}`} key={message.id}>
                   <div className="speaker">{message.role === "user" ? "Вы" : "Ассистент"}</div>
                   <div className="message-body">
-                    {message.text && <p>{message.text}</p>}
+                    {message.text && (
+                      message.role === "assistant"
+                        ? <MessageMarkdown text={message.text} />
+                        : <p>{message.text}</p>
+                    )}
                     {isLatestAnswer && message.status === "streaming" && (
                       <p className="message-status" role="status" aria-live="polite">
                         <span className="status-dot" aria-hidden="true" />
