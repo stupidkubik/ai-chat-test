@@ -1,6 +1,6 @@
-# Vercel Preview and current deployment
+# Vercel deployments for Q07
 
-Для Q07 используется отдельный Vercel Preview. Production-деплой не является частью этого этапа.
+Первоначальный план Q07 предусматривал Preview. 26.09.2026 владелец выбрал готовый Production-деплой для полного тестирования. Фактические результаты записаны в [QA.md](QA.md).
 
 ## Текущее состояние
 
@@ -10,18 +10,18 @@
 - Сборка на Vercel прошла: Next.js `16.3.6`, `npm run build`; маршрут `/api/chat` собран как динамический.
 - Приложение открылось в авторизованной сессии Vercel. В браузере без входа Preview перенаправляет на Vercel Login.
 - Git-интеграция с GitHub пока не подключена: текущий Preview загружен CLI из локальной рабочей копии. Новые push в GitHub пока не создают автоматические Preview.
-- Владелец проекта сообщил, что добавил `OPENROUTER_API_KEY` в переменные Vercel и проверил чат: он работает. Область переменной (Preview или Production) независимо не подтверждена; значение секрета не считывалось.
-- Текущий deployment `7TZsHwZNuAsN6ZuoWLF16SHKkfXH` имеет статус `READY`, `target=production`, commit `2126d63` и URL `https://ai-chat-test-qtkzgxfbh-evgeniis-projects-0daccd9a.vercel.app`. Vercel назначил ему production aliases `ai-chat-test-lake.vercel.app` и `ai-chat-test-evgeniis-projects-0daccd9a.vercel.app`. Это Production deployment, не Preview; чат на нём проверен владельцем. Независимая проверка console, SSE и Stop ещё не выполнена.
+- `vercel env ls` показывает `OPENROUTER_API_KEY` только для Production; значение секрета не считывалось. Preview `/api/chat` подтверждённо возвращает HTTP 500 `configuration_error`.
+- Текущий deployment `7TZsHwZNuAsN6ZuoWLF16SHKkfXH` имеет статус `READY`, `target=production`, commit `2126d63` и URL `https://ai-chat-test-qtkzgxfbh-evgeniis-projects-0daccd9a.vercel.app`. Vercel назначил ему production aliases `ai-chat-test-lake.vercel.app` и `ai-chat-test-evgeniis-projects-0daccd9a.vercel.app`. Живой поток, Stop, Esc, история, длинный ответ и мобильная компоновка проверены независимо. Изолированный браузер перенаправляется на Vercel Login также для Production.
 
 ## Следующие шаги для Q07
 
-1. Проверить в Vercel, к каким окружениям привязан `OPENROUTER_API_KEY`; если Q07 должен оставаться изолированным, задать его для Preview отдельно. Не сохранять значение секрета в Git, команды или документы.
+1. Если нужен работающий Preview, задать `OPENROUTER_API_KEY` для Preview отдельно и создать новый Preview deployment. Не сохранять значение секрета в Git, команды или документы. Текущий Preview URL после изменения переменной сам по себе не обновится.
 2. Создать Preview-деплой после настройки Preview-переменной. Для ручной загрузки из локальной привязанной копии использовать `npx vercel deploy --yes --scope evgeniis-projects-0daccd9a` без `--prod`; Vercel CLI выдаёт Preview по умолчанию.
 3. При необходимости настроить Git-интеграцию так, чтобы push в `codex/q07-qa` создавал Preview. Перед подключением проверить настройки Production branch: импорт репозитория с `main` может создать Production-деплой.
-4. Открыть Preview в браузере, авторизованном в Vercel, и проверить ошибки в console. Затем отправить короткий запрос и подтвердить поток `/api/chat`, отсутствие ключа в клиентских запросах и отмену после Stop.
+4. После нового Preview-деплоя открыть его в браузере, авторизованном в Vercel, и повторить короткий живой запрос, поток `/api/chat` и Stop.
 5. В Function Logs проверить ошибки и время выполнения. Не сохранять в отчёт API-ключ, заголовок Authorization или текст пользовательских сообщений.
-6. Записать commit, URL, браузер/viewport и результаты в `docs/QA.md`. Управляемые 429, timeout и mid-stream disconnect проверять локально на mock; не включать mock в Preview.
+6. Результаты уже проведённого Production QA записаны в `docs/QA.md`. Управляемые 429, timeout и mid-stream disconnect проверены локально на mock; mock не включён в deployment.
 
-Переменные Preview и Production независимы. Q07 предназначен для проверки Preview; текущий Production deployment оставлен без изменений. Перед дальнейшим тестированием уточнить область переменной, чтобы Preview работал на своём окружении.
+Переменные Preview и Production независимы. При тестировании не менялись deployment, области секрета и защита доступа.
 
 `app/api/chat/route.ts` задаёт `runtime = "nodejs"` и `maxDuration = 120`; `vercel.json` включает `supportsCancellation` для chat route. `.gitignore` исключает `.vercel/` и `.env.local`.
