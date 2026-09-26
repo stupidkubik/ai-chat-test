@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { buildRequestMessages, MAX_MESSAGE_CHARACTERS } from "./chat-context.mjs";
+import { isChatErrorCode, messageForErrorCode } from "./chat-errors.mjs";
 import { consumeSseEvents, SseParseError } from "./chat-stream.mjs";
 import { DEMO_STATES, type ChatMessage, type DemoState } from "./chat-types";
 
@@ -10,7 +11,9 @@ type ChatExperienceProps = {
   showDemoControls: boolean;
 };
 
-const CLIENT_TIMEOUT_MS = 100_000;
+// Longer than the server's 45 s upstream idle limit, so the server reports a stall first
+// and this timer only catches a connection that went silent between browser and server.
+const CLIENT_IDLE_TIMEOUT_MS = 60_000;
 
 const demoLabels: Record<DemoState, string> = {
   empty: "Пустой чат",
@@ -77,20 +80,11 @@ const demoMessages: Record<DemoState, ChatMessage[]> = {
   ],
 };
 
-const errorMessages: Record<string, string> = {
-  rate_limited: "Лимит запросов к бесплатной модели достигнут. Подождите и попробуйте ещё раз.",
-  timeout: "Ответ занял слишком много времени. Попробуйте ещё раз.",
-  network_error: "Соединение прервалось. Проверьте сеть и отправьте сообщение ещё раз.",
-  invalid_request: "Проверьте вопрос и попробуйте ещё раз.",
-  configuration_error: "Сервис временно недоступен. Попробуйте позже.",
-  provider_error: "Сервис временно недоступен. Попробуйте позже.",
-};
-
 class ChatRequestError extends Error {
   code: string;
 
   constructor(code: string) {
-    const safeCode = Object.hasOwn(errorMessages, code) ? code : "provider_error";
+    const safeCode = isChatErrorCode(code) ? code : "provider_error";
     super(messageForErrorCode(safeCode));
     this.code = safeCode;
   }
@@ -110,12 +104,6 @@ function errorCodeForStatus(status: number): string {
   if (status === 408 || status === 504) return "timeout";
   if (status === 400) return "invalid_request";
   return "provider_error";
-}
-
-function messageForErrorCode(code: string): string {
-  return Object.hasOwn(errorMessages, code)
-    ? errorMessages[code]
-    : errorMessages.provider_error;
 }
 
 async function responseErrorCode(response: Response): Promise<string> {
@@ -231,11 +219,16 @@ export default function ChatExperience({
     shouldStickToBottomRef.current = true;
     textareaRef.current?.focus();
 
-    const clientTimeout = window.setTimeout(() => {
-      if (activeControllerRef.current !== controller) return;
-      clientTimedOut = true;
-      controller.abort();
-    }, CLIENT_TIMEOUT_MS);
+    let clientTimeout = 0;
+    const resetClientTimeout = () => {
+      window.clearTimeout(clientTimeout);
+      clientTimeout = window.setTimeout(() => {
+        if (activeControllerRef.current !== controller) return;
+        clientTimedOut = true;
+        controller.abort();
+      }, CLIENT_IDLE_TIMEOUT_MS);
+    };
+    resetClientTimeout();
 
     try {
       const response = await fetch("/api/chat", {
@@ -294,7 +287,7 @@ export default function ChatExperience({
             ? { ...message, text: message.text + delta }
             : message
         )));
-      });
+      }, { onChunk: resetClientTimeout });
 
       if (!receivedDone) throw new ChatRequestError("network_error");
 

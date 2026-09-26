@@ -1,3 +1,5 @@
+import { CHAT_ERRORS } from "../../chat-errors.mjs";
+
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MOCK_URL = "http://127.0.0.1:8787/api/v1/chat/completions";
 const MODEL = "openrouter/free";
@@ -7,7 +9,9 @@ const MAX_TOTAL_CHARACTERS = 20_000;
 const MAX_REQUEST_BYTES = 128 * 1024;
 const MAX_SSE_EVENT_CHARACTERS = 1024 * 1024;
 const UPSTREAM_IDLE_TIMEOUT_MS = 45_000;
-const UPSTREAM_TOTAL_TIMEOUT_MS = 90_000;
+const UPSTREAM_FIRST_DATA_TIMEOUT_MS = 90_000;
+const RATE_LIMIT_REQUESTS = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 const MOCK_SCENARIOS = new Set([
   "success",
@@ -19,23 +23,80 @@ const MOCK_SCENARIOS = new Set([
   "abort-observed",
 ]);
 
-const APP_ERRORS = {
-  rate_limited: "Бесплатная модель сейчас перегружена. Попробуйте позже.",
-  timeout: "Ответ не пришёл вовремя. Попробуйте ещё раз.",
-  network_error: "Соединение прервалось. Проверьте сеть и попробуйте ещё раз.",
-  provider_error: "Сервис временно недоступен.",
-};
-
-function jsonError(status, code, message) {
+function jsonError(status, code, headers = {}) {
   return Response.json(
-    { error: { code, message } },
-    { status, headers: { "Cache-Control": "no-store" } },
+    { error: { code, message: CHAT_ERRORS[code] } },
+    { status, headers: { "Cache-Control": "no-store", ...headers } },
   );
 }
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+/**
+ * Browsers always send Origin with a fetch POST, and modern ones add Sec-Fetch-Site.
+ * This stops other sites and casual scripts from spending the key; a forged Origin
+ * header still passes, which is why the rate limiter exists as a second layer.
+ * @param {Request} request
+ */
+export function isSameOriginRequest(request) {
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite) return fetchSite === "same-origin";
+
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+
+  const host = request.headers.get("x-forwarded-host")
+    ?? request.headers.get("host")
+    ?? new URL(request.url).host;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sliding-window limit per client IP. The Map lives in one function instance only:
+ * on serverless each instance counts separately and forgets on a cold start.
+ * @param {{ limit?: number, windowMs?: number, now?: () => number }} options
+ */
+export function createRateLimiter(options = {}) {
+  const limit = options.limit ?? RATE_LIMIT_REQUESTS;
+  const windowMs = options.windowMs ?? RATE_LIMIT_WINDOW_MS;
+  const now = options.now ?? Date.now;
+  const hits = new Map();
+
+  return {
+    /** @param {string} key @returns {{ ok: true } | { ok: false, retryAfterSeconds: number }} */
+    take(key) {
+      const currentTime = now();
+      const windowStart = currentTime - windowMs;
+
+      for (const [storedKey, times] of hits) {
+        if (times.at(-1) <= windowStart) hits.delete(storedKey);
+      }
+
+      const recent = (hits.get(key) ?? []).filter((time) => time > windowStart);
+      if (recent.length >= limit) {
+        hits.set(key, recent);
+        return { ok: false, retryAfterSeconds: Math.ceil((recent[0] + windowMs - currentTime) / 1000) };
+      }
+
+      recent.push(currentTime);
+      hits.set(key, recent);
+      return { ok: true };
+    },
+  };
+}
+
+/** @param {Request} request */
+function clientKey(request) {
+  return request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
+}
+
+const sharedRateLimiter = createRateLimiter();
 
 /**
  * @param {unknown} value
@@ -131,14 +192,16 @@ export function resolveProviderConfig(env) {
 
 /**
  * Starts both upstream deadlines before fetch, so a stall before headers is covered too.
+ * The first-data deadline ends once the model sends content: after that a long but live
+ * answer is limited only by inactivity and by the platform's maxDuration.
  * @param {AbortController} controller
- * @param {{ idleMs?: number, totalMs?: number }} options
+ * @param {{ idleMs?: number, firstDataMs?: number }} options
  */
 export function createTimeoutGuard(controller, options = {}) {
   const idleMs = options.idleMs ?? UPSTREAM_IDLE_TIMEOUT_MS;
-  const totalMs = options.totalMs ?? UPSTREAM_TOTAL_TIMEOUT_MS;
+  const firstDataMs = options.firstDataMs ?? UPSTREAM_FIRST_DATA_TIMEOUT_MS;
   let idleTimer;
-  let totalTimer;
+  let firstDataTimer;
   let timeoutReason = null;
   let stopped = false;
 
@@ -157,16 +220,19 @@ export function createTimeoutGuard(controller, options = {}) {
 
   return {
     start() {
-      totalTimer = setTimeout(() => abortForTimeout("total"), totalMs);
+      firstDataTimer = setTimeout(() => abortForTimeout("first-data"), firstDataMs);
       resetIdleTimer();
     },
     activity() {
       resetIdleTimer();
     },
+    receivedData() {
+      clearTimeout(firstDataTimer);
+    },
     stop() {
       stopped = true;
       clearTimeout(idleTimer);
-      clearTimeout(totalTimer);
+      clearTimeout(firstDataTimer);
     },
     get timeoutReason() {
       return timeoutReason;
@@ -174,20 +240,24 @@ export function createTimeoutGuard(controller, options = {}) {
   };
 }
 
+function appError(code) {
+  return { code, message: CHAT_ERRORS[code] };
+}
+
 function timeoutError() {
-  return { code: "timeout", message: APP_ERRORS.timeout };
+  return appError("timeout");
 }
 
 function networkError() {
-  return { code: "network_error", message: APP_ERRORS.network_error };
+  return appError("network_error");
 }
 
 function providerError() {
-  return { code: "provider_error", message: APP_ERRORS.provider_error };
+  return appError("provider_error");
 }
 
 function rateLimitError() {
-  return { code: "rate_limited", message: APP_ERRORS.rate_limited };
+  return appError("rate_limited");
 }
 
 function mapUpstreamFailure(status) {
@@ -236,7 +306,7 @@ function inspectSseEvent(rawEvent) {
   }
 
   const data = dataLines.join("\n");
-  if (data === "[DONE]") return { done: true };
+  if (data === "[DONE]") return { done: true, hasData: true };
 
   if (data) {
     try {
@@ -251,7 +321,8 @@ function inspectSseEvent(rawEvent) {
     return { error: providerError() };
   }
 
-  return { done: false };
+  // Comment-only events are provider keepalives and do not count as the model's first data.
+  return { done: false, hasData: dataLines.length > 0 };
 }
 
 function createRelayedBody(upstreamBody, { abortController, timeoutGuard, request, cleanup }) {
@@ -307,6 +378,7 @@ function createRelayedBody(upstreamBody, { abortController, timeoutGuard, reques
             return;
           }
 
+          if (inspected.hasData) timeoutGuard.receivedData();
           controller.enqueue(encoder.encode(rawEvent));
           if (inspected.done) {
             sawDone = true;
@@ -416,28 +488,34 @@ async function readJsonRequest(request) {
  *   env?: Record<string, string | undefined>,
  *   fetchImpl?: typeof fetch,
  *   idleTimeoutMs?: number,
- *   totalTimeoutMs?: number,
+ *   firstDataTimeoutMs?: number,
+ *   rateLimiter?: ReturnType<typeof createRateLimiter>,
  * }} options
  */
 export async function handleChatRequest(request, options = {}) {
+  if (!isSameOriginRequest(request)) return jsonError(403, "forbidden");
+
+  if (options.rateLimiter) {
+    const limit = options.rateLimiter.take(clientKey(request));
+    if (!limit.ok) {
+      return jsonError(429, "local_rate_limited", { "Retry-After": String(limit.retryAfterSeconds) });
+    }
+  }
+
   const input = await readJsonRequest(request);
   const validation = validateChatInput(input);
-  if (!validation.ok) {
-    return jsonError(400, "invalid_request", "Проверьте текст запроса и попробуйте ещё раз.");
-  }
+  if (!validation.ok) return jsonError(400, "invalid_request");
 
   const env = options.env ?? process.env;
   const config = resolveProviderConfig(env);
-  if (!config.ok) {
-    return jsonError(500, "configuration_error", "Сервис временно недоступен.");
-  }
+  if (!config.ok) return jsonError(500, "configuration_error");
 
   if (request.signal.aborted) return new Response(null, { status: 499 });
 
   const abortController = new AbortController();
   const timeoutGuard = createTimeoutGuard(abortController, {
     idleMs: options.idleTimeoutMs,
-    totalMs: options.totalTimeoutMs,
+    firstDataMs: options.firstDataTimeoutMs,
   });
   const onClientAbort = () => {
     timeoutGuard.stop();
@@ -472,28 +550,28 @@ export async function handleChatRequest(request, options = {}) {
     const timeout = timeoutGuard.timeoutReason;
     cleanup();
     if (request.signal.aborted && !timeout) return new Response(null, { status: 499 });
-    if (timeout) return jsonError(504, "timeout", APP_ERRORS.timeout);
-    return jsonError(502, "network_error", APP_ERRORS.network_error);
+    if (timeout) return jsonError(504, "timeout");
+    return jsonError(502, "network_error");
   }
 
   if (timeoutGuard.timeoutReason) {
     await cancelResponseBody(upstreamResponse.body);
     cleanup();
-    return jsonError(504, "timeout", APP_ERRORS.timeout);
+    return jsonError(504, "timeout");
   }
 
   if (!upstreamResponse.ok) {
     await cancelResponseBody(upstreamResponse.body);
     cleanup();
     const { responseStatus, error } = mapUpstreamFailure(upstreamResponse.status);
-    return jsonError(responseStatus, error.code, error.message);
+    return jsonError(responseStatus, error.code);
   }
 
   const responseContentType = upstreamResponse.headers.get("content-type")?.toLowerCase() ?? "";
   if (!responseContentType.includes("text/event-stream") || !upstreamResponse.body) {
     await cancelResponseBody(upstreamResponse.body);
     cleanup();
-    return jsonError(502, "provider_error", APP_ERRORS.provider_error);
+    return jsonError(502, "provider_error");
   }
 
   const body = createRelayedBody(upstreamResponse.body, {
@@ -515,5 +593,5 @@ export async function handleChatRequest(request, options = {}) {
 
 /** @param {Request} request */
 export function POST(request) {
-  return handleChatRequest(request);
+  return handleChatRequest(request, { rateLimiter: sharedRateLimiter });
 }
