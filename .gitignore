@@ -19,3 +19,6 @@ coverage/
 # Local design tooling and browser inspection artifacts
 .agents/
 .playwright-cli/
+
+# Local screenshots and browser test output
+output/
