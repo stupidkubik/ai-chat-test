@@ -324,6 +324,11 @@ function createRelayedBody(upstreamBody, { abortController, timeoutGuard, reques
         }
 
         if (upstreamEnded) {
+          if (pending) {
+            // EOF also finishes the last SSE event when the provider omits the blank line.
+            pending += "\n\n";
+            continue;
+          }
           if (!sawDone) controller.enqueue(encoder.encode(formatSseError(networkError())));
           close(controller);
           return;
